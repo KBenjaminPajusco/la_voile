@@ -23,6 +23,8 @@ export interface QuizScene {
   jibReleased?: boolean;
   gennakerCollapsed?: boolean;
   crewFore?: -1 | 0 | 1;
+  /** false: the right answer is not "the best trim now" (timing, tactics) - no fix-it-in-3D */
+  interactive?: boolean;
   /** what to look at, one short line */
   look: string;
 }
@@ -55,12 +57,12 @@ export const QUIZ_SCENES: Record<string, QuizScene> = {
   q25: { tws: 9, twa: -42, trimTws: 14, delta: { jibSheet: 0.08 }, look: L('Lull with the sails still on the breeze settings: the boat comes upright and slows. Flat, twisted sails no longer carry the power.', 'Molle avec les voiles encore sur les réglages de brise : le bateau se redresse et ralentit. Des voiles plates et vrillées ne portent plus la puissance.') },
   q26: { tws: 8, twa: 40, set: { mainSheet: 1, traveller: 0.5, backstay: 0 }, view: 'main', look: L('Main block-to-block: top telltale stalled, tight leech.', 'GV bordée à bloc : penon du haut décroché, chute fermée.') },
   q27: { tws: 12, twa: -50, set: { jibSheet: 0.3 }, sea: 1, look: L('Rounding up with the jib still on the reaching trim: it luffs.', 'On lofe avec le foc encore réglé pour le travers : il faseye.') },
-  q28: { tws: 10, twa: 30, set: { jibSheet: 0.1, mainSheet: 0.1 }, view: 'chase', look: L('Dial-up: both sails luffing, the boat nearly stopped.', 'Dial-up : les deux voiles faseyent, le bateau presque arrêté.') },
+  q28: { interactive: false, tws: 10, twa: 30, set: { jibSheet: 0.1, mainSheet: 0.1 }, view: 'chase', look: L('Dial-up: both sails luffing, the boat nearly stopped.', 'Dial-up : les deux voiles faseyent, le bateau presque arrêté.') },
   q29: { tws: 18, twa: 105, trimTws: 13, headsail: 'gennaker', view: 'chase', forces: true, look: L('Gust on the reach: the kite force is largely sideways, heel and helm jump.', 'Risée au travers : la force du spi est surtout latérale, la gîte et la barre bondissent.') },
   q30: { tws: 12, twa: 34, trimTwa: 44, look: L('Header: the jib is suddenly over-eased, windward telltales lifting.', 'Refusante : le foc est soudain trop choqué, penons au vent qui se lèvent.') },
   q31: { tws: 6, twa: 44, trimTwa: 40, delta: { jibLead: -0.5, jibSheet: 0.25 }, look: L('Strong gradient: the top of the jib stalls while the bottom flows.', 'Fort gradient : le haut du foc décroche pendant que le bas écoule.') },
   q32: { tws: 11, twa: 40, view: 'chase', look: L('Pre-start, close-hauled and trimmed before the luff.', 'Pré-départ, au près et bordé avant le lof.') },
-  q33: { tws: 10, twa: 45, set: { jibSheet: 0.3, mainSheet: 0.2 }, look: L('Pre-start: both sails eased and luffing, ready to accelerate.', 'Pré-départ : les deux voiles choquées et faseyantes, prêt à accélérer.') },
+  q33: { interactive: false, tws: 10, twa: 45, set: { jibSheet: 0.3, mainSheet: 0.2 }, look: L('Pre-start: both sails eased and luffing, ready to accelerate.', 'Pré-départ : les deux voiles choquées et faseyantes, prêt à accélérer.') },
   q37: { tws: 20, twa: -40, set: { traveller: 0.15, hike: 1, backstay: 0.5 }, sea: 2, view: 'chase', forces: true, look: L('Overpowered in 20 kn: main luff bubbling, heel still high.', 'Trop de puissance dans 20 nds : guindant de GV qui bulle, gîte encore forte.') },
   q34: { tws: 14, twa: 40, sea: 1, look: L('Tacking duel: the jib near its mark, the crew working.', 'Duel de virements : le foc près de sa marque, l\'équipage au travail.') },
   q35: { tws: 16, twa: -40, sea: 1, forces: true, look: L('On the layline with breeze arriving: note the heeling share.', 'Sur la layline avec la brise qui arrive : notez la part de gîte.') },

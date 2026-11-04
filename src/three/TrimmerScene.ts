@@ -106,6 +106,9 @@ export interface SceneOptions {
   handleKeys?: ControlKey[];
 }
 
+/** jib tracks: on the side deck, between the cabin top and the shrouds (J/80) */
+const JIB_TRACK_Z = 0.63;
+
 export type HandleId = 'jibCar' | 'jibClew' | 'winch' | 'jibHead' | 'forestay' | 'backstay' | 'mainsheet' | 'traveller' | 'vang' | 'outhaul' | 'cunningham' | 'kiteClew';
 
 /** What each handle drives, and how many metres of drag along its axis cover the full 0..1 range. */
@@ -183,6 +186,9 @@ export class TrimmerScene {
   private vang: THREE.Mesh;
   private travCar: THREE.Mesh;
   private jibCars: THREE.Mesh[] = [];
+  private jibTracks: THREE.Mesh[] = [];
+  /** deck height under the jib track (fitted on the J/80 model once loaded): y = a + b x */
+  private trackDeck = { a: 0, b: 0, ok: false };
   private windex = new THREE.Group();
   private tiller = new THREE.Group();
   private crew: THREE.Group[] = [];
@@ -208,6 +214,8 @@ export class TrimmerScene {
   private kiteBlend = 0;
   private waveMo = { heave: 0, pitch: 0, roll: 0 };
   private mainLeechAim = new THREE.Vector3(-2.3, DECK + 5.5, 0);
+  /** jib camera aim: between the luff telltales and the leech, low-mid height (both in frame) */
+  private jibAim = new THREE.Vector3(0.3, DECK + 2.8, 0.6);
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -323,11 +331,12 @@ export class TrimmerScene {
     trav.rotation.z = 0;
     this.boat.add(trav);
     this.travCar = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, 0.1), blackMetal);
-    // inboard jib tracks (one per side) and their cars
+    // jib tracks on the side decks (one per side), between the cabin top and the shrouds
     for (const sd of [-1, 1]) {
       const tr = rod(0.012, blackMetal);
-      placeRod(tr, v(-0.4, DECK + 0.08, sd * 0.45), v(-1.15, DECK + 0.08, sd * 0.45));
+      placeRod(tr, v(-0.4, sheerAt(-0.4) + 0.015, sd * JIB_TRACK_Z), v(-1.15, sheerAt(-1.15) + 0.015, sd * JIB_TRACK_Z));
       this.boat.add(tr);
+      this.jibTracks.push(tr);
       const car = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.07, 0.07), new THREE.MeshStandardMaterial({ color: 0x22d3ee, roughness: 0.4, metalness: 0.3 }));
       this.jibCars.push(car);
       this.boat.add(car);
@@ -487,6 +496,7 @@ export class TrimmerScene {
         if (this.disposed) return;
         this.boat.add(g);
         this.staticRig.visible = false;
+        this.fitTrackDeck(g);
       })
       .catch((e) => console.warn('[trimmaster3d] J/80 model not loaded, keeping the simple boat', e));
     KiteMold.load()
@@ -636,7 +646,10 @@ export class TrimmerScene {
       visible: !kiteUp,
       side: jibSide,
       draft: sh.jib.draft,
-      footRise: 0.38,
+      // a SHEET, not an inhauler: easing lets the clew ride up and forward along the sheeting line
+      // (the leech opens), trimming pulls it down to the car. Car aft: the pull is along the foot,
+      // so an eased clew climbs even more.
+      footRise: released ? 0.9 : 0.26 + (1 - s.controls.jibSheet) * (0.55 + 0.45 * s.controls.jibLead),
       luff: (h, o) => {
         o.copy(TACK).lerp(jHead, h);
         const b = Math.sin(Math.PI * h);
@@ -646,7 +659,9 @@ export class TrimmerScene {
       },
       chord: jibChord,
       angle: (h) => (released ? 3 + 5 * h : sh.jib.angle + sh.jib.twist * h),
-      depth: (h) => (released ? 0.035 : depthAt(h, sh.jib.depthBottom, sh.jib.depth, sh.jib.depthTop)),
+      // a loose-footed jib's foot is tied at tack and clew: its camber dies out towards the foot
+      // (and more so with the car aft, the sheet pulling along the foot)
+      depth: (h) => (released ? 0.035 : depthAt(h, sh.jib.depthBottom, sh.jib.depth, sh.jib.depthTop) * (h < 0.22 ? 1 - (0.32 + 0.18 * s.controls.jibLead) * (1 - h / 0.22) ** 1.5 : 1)),
       wobble: (h, tt) => {
         const c = jibChord(h);
         const sec = interpSection(jibSecs, h);
@@ -654,12 +669,21 @@ export class TrimmerScene {
         let w = flog * c * 0.07 * Math.sin(t * 15 - tt * 9 + h * 5) * Math.pow(tt, 0.8);
         const bubble = Math.min(1, Math.max(0, -sec.a / 5)) * (1 - flog);
         // luff folds: short horizontal wrinkles just behind the luff, between the hanks
-        if (sh.jibLuffFold > 0.02 && tt < 0.16) w += sh.jibLuffFold * 0.035 * Math.sin(h * Math.PI * 2 * 13) * (1 - tt / 0.16) ** 1.5 * (1 - flog);
-        w -= c * 0.11 * bubble * Math.max(0, 1 - tt / 0.35) ** 2 * (0.75 + 0.25 * Math.sin(t * 9 + h * 3));
+        if (sh.jibLuffFold > 0.02 && tt < 0.16) w += sh.jibLuffFold * 0.035 * Math.sin(h * Math.PI * 2 * 13) * Math.sin((Math.PI * tt) / 0.16) * (1 - flog);
+        // luffing: the bubble sits just AFT of the luff - the luff itself stays hanked on the forestay
+        const bump = tt < 0.38 ? Math.sin((Math.PI * tt) / 0.38) ** 1.3 : 0;
+        w -= c * 0.095 * bubble * bump * (0.75 + 0.25 * Math.sin(t * 9 + h * 3));
         return w;
       },
     };
     this.jib.update(jibState);
+    {
+      // the jib's leech is THE reading for the sheet: aim at the middle of the leech, pulled
+      // towards the luff so the telltales stay in frame too
+      const leech = sailPoint(jibState, 0.42, 0.97, new THREE.Vector3());
+      const luff = sailPoint(jibState, 0.42, 0.12, new THREE.Vector3());
+      this.jibAim.lerp(leech.lerp(luff, 0.35), 0.15);
+    }
     this.jibMat.opacity = this.opts.xray ? 0.45 : 0.94;
 
     const bend = Math.min(1, 0.85 * s.controls.backstay + 0.15 * s.controls.vang * s.controls.mainSheet);
@@ -684,8 +708,11 @@ export class TrimmerScene {
         let w = flog * c * 0.05 * Math.sin(t * 12 - tt * 8 + h * 4) * Math.pow(tt, 1.2);
         const bub = Math.min(1, backwind * 1.2 + Math.max(0, -sec.a / 6) * (1 - flog));
         // cunningham off: fine wrinkles from the luff (the luff tension the wind wants is not there)
-        if (sh.mainLuffFold > 0.02 && tt < 0.12) w += sh.mainLuffFold * 0.03 * Math.sin(h * Math.PI * 2 * 17) * (1 - tt / 0.12) ** 1.5 * (1 - flog);
-        w -= c * 0.09 * bub * Math.max(0, 1 - tt / 0.3) ** 2 * (1 - 0.5 * h) * (0.8 + 0.2 * Math.sin(t * 8));
+        if (sh.mainLuffFold > 0.02 && tt < 0.12) w += sh.mainLuffFold * 0.03 * Math.sin(h * Math.PI * 2 * 17) * Math.sin((Math.PI * tt) / 0.12) * (1 - flog);
+        // backwinded: a bubble just AFT of the luff, pushed in and fluttering a little - the luff
+        // itself never leaves the mast (it is held in the track), so the bulge is zero at tt = 0
+        const bump = tt < 0.32 ? Math.sin((Math.PI * tt) / 0.32) ** 1.3 : 0;
+        w -= c * 0.075 * bub * bump * (1 - 0.5 * h) * (0.82 + 0.18 * Math.sin(t * 9 + h * 5));
         return w;
       },
     };
@@ -770,8 +797,10 @@ export class TrimmerScene {
     (this.kiteSheet.material as THREE.MeshStandardMaterial).color.copy(new THREE.Color(0xfbbf24).lerp(new THREE.Color(0xef4444), loadFrac));
     const clew = sailPoint(jibState, 0, 1, new THREE.Vector3());
     // car on the inboard track, aft of the clew on the sheeting line
-    const lead = V(-0.5 - s.controls.jibLead * 0.55, DECK + 0.2, jibSide * 0.45);
-    for (const [i, sd] of [-1, 1].entries()) this.jibCars[i].position.set(-0.5 - s.controls.jibLead * 0.55, DECK + 0.21, sd * 0.45);
+    const carX = -0.5 - s.controls.jibLead * 0.55;
+    const deckY = this.deckUnderTrack(carX);
+    const lead = V(carX, deckY + 0.06, jibSide * JIB_TRACK_Z);
+    for (const [i, sd] of [-1, 1].entries()) this.jibCars[i].position.set(carX, deckY + 0.035, sd * JIB_TRACK_Z);
     const winchJ = V(WINCH.x, WINCH.y + 0.08, jibSide * WINCH.z);
     this.jibSheet.visible = this.jibSheet2.visible = this.jibLazy.visible = !kiteUp;
     placeRod(this.jibSheet, clew, lead);
@@ -1043,6 +1072,36 @@ export class TrimmerScene {
     this.fx.uniforms.uGustRc.value = 75;
   }
 
+  private deckUnderTrack(x: number) {
+    return this.trackDeck.ok ? this.trackDeck.a + this.trackDeck.b * x : sheerAt(x);
+  }
+
+  /** find the J/80 model's side-deck height under the jib tracks, so the tracks and cars sit on it */
+  private fitTrackDeck(model: THREE.Object3D) {
+    this.boat.updateMatrixWorld(true);
+    const rc = new THREE.Raycaster();
+    const ys: [number, number][] = [];
+    for (const x of [-0.35, -1.2]) {
+      const hs: number[] = [];
+      for (const sd of [-1, 1]) {
+        const o = this.boat.localToWorld(new THREE.Vector3(x, DECK + 2, sd * JIB_TRACK_Z));
+        const down = this.boat.localToWorld(new THREE.Vector3(x, DECK - 2, sd * JIB_TRACK_Z)).sub(o).normalize();
+        rc.set(o, down);
+        const hit = rc.intersectObject(model, true)[0];
+        if (hit) hs.push(this.boat.worldToLocal(hit.point.clone()).y);
+      }
+      if (hs.length) ys.push([x, hs.reduce((a, b) => a + b, 0) / hs.length]);
+    }
+    if (ys.length < 2) return;
+    const [[x0, y0], [x1, y1]] = ys;
+    const b = (y1 - y0) / (x1 - x0);
+    this.trackDeck = { a: y0 - b * x0, b, ok: true };
+    this.jibTracks.forEach((tr, i) => {
+      const sd = i === 0 ? -1 : 1;
+      placeRod(tr, new THREE.Vector3(-0.4, this.deckUnderTrack(-0.4) + 0.008, sd * JIB_TRACK_Z), new THREE.Vector3(-1.15, this.deckUnderTrack(-1.15) + 0.008, sd * JIB_TRACK_Z));
+    });
+  }
+
   private placeCamera(s: Snapshot, dt: number, ws: number, Ls: number, kiteUp: boolean, acc: { surge: number; roll: number; rollAcc: number; heaveAcc: number }) {
     const view = this.opts.view;
     const cam = this.camera;
@@ -1098,13 +1157,12 @@ export class TrimmerScene {
       // side deck under the boom, looking up the jib luff — the leeward telltales are right there
       this.kiteBlend += ((kiteUp ? 1 : 0) - this.kiteBlend) * Math.min(1, dt * 1.2);
       const kb = this.kiteBlend;
-      // on the leeward side deck just aft of the jib car: the clew, the sheet to the lead, the leech
-      // and the slot are all in front of you (kite up: same seat, looking at its luff)
-      // just off the boat to leeward, level with the jib: the whole sail face-on from its lee side -
-      // head, leech, clew, the sheet to the car and the slot with the main behind it (no seat in
-      // the cockpit gives that: the eased main and boom are in the way)
-      eye = new THREE.Vector3(-0.6 + 0.4 * kb, DECK + 1.6, -ws * (4.5 + 2.5 * kb));
-      tgt = new THREE.Vector3(0.9, DECK + 3.45, -ws * 0.2).lerp(new THREE.Vector3(2.6, DECK + 4.2, -ws * 1.6), kb);
+      // crouched on the leeward side deck, just aft of the clew, as a crew member would: looking
+      // UP the jib from under its foot - the draft stripes show the camber at each height and the
+      // leech shows the twist up to the head (kite up: same seat, looking out at its luff)
+      eye = new THREE.Vector3(-2.7 + 1.4 * kb, DECK + 0.6, -ws * (1.02 + 0.0 * kb));
+      const up = new THREE.Vector3(0.7, DECK + 2.5, -ws * 0.2).lerp(this.jibAim, 0.15);
+      tgt = up.lerp(new THREE.Vector3(2.6, DECK + 4.2, -ws * 1.6), kb);
     } else {
       const crossing = 1 - Math.min(1, Math.abs(ws));
       // jib: the trimmer sits at the winch on the windward rail. Kite: they move forward of the
@@ -1112,7 +1170,8 @@ export class TrimmerScene {
       this.kiteBlend += ((kiteUp ? 1 : 0) - this.kiteBlend) * Math.min(1, dt * 1.2);
       const kb = this.kiteBlend;
       eye = new THREE.Vector3(-2.2 + 1.6 * kb, DECK + 1.0 - 0.3 * crossing, ws * (1.1 - 0.1 * kb));
-      tgt = new THREE.Vector3(1.8, DECK + 2.7, Ls * 0.2).lerp(new THREE.Vector3(3.6, DECK + 4.0, Ls * 0.9), kb);
+      // jib: look across at the leech and the slot (the sheet's whole story), not up the forestay
+      tgt = this.jibAim.clone().lerp(new THREE.Vector3(3.6, DECK + 4.0, Ls * 0.9), kb);
     }
     eye.add(h.o);
     // mouse look: rotate the gaze about the boat's up axis, then pitch
@@ -1141,7 +1200,7 @@ export class TrimmerScene {
     // acceleration pushes you into the seat: a small FOV kick
     const kick = this.opts.inertia ? Math.max(-4, Math.min(6, (s.accel ?? 0) * 12)) : 0;
     this.fovKick += (kick - this.fovKick) * Math.min(1, dt * 3);
-    cam.fov = this.look.fov + this.fovKick + (view === 'leeward' ? 8 : 0);
+    cam.fov = this.look.fov + this.fovKick + (view === 'leeward' ? 14 : view === 'trimmer' && !kiteUp ? 10 : 0);
     cam.updateProjectionMatrix();
   }
 

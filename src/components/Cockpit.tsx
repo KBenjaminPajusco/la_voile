@@ -23,6 +23,8 @@ import { ControlSlider } from './ControlSlider';
 import { Bar, Chip, Kbd, Sparkline, toneText } from '../ui/kit';
 import { useProgress } from '../store/progress';
 import { L } from '../i18n';
+import { CoachCard, adviceHints, newCoach, updateCoach } from './CoachCard';
+import { GraduationCap, Lightbulb } from 'lucide-react';
 
 const DT = 0.05;
 // three.js lives in its own chunk, loaded only when the 3D view is opened
@@ -59,7 +61,7 @@ export function Cockpit({
   freeMode = false,
 }: {
   def: ScenarioDef;
-  onFinish: (r: RunResult, runner: ScenarioRunner) => void;
+  onFinish: (r: RunResult, runner: ScenarioRunner, easy: boolean) => void;
   onExit: () => void;
   freeMode?: boolean;
 }) {
@@ -72,9 +74,33 @@ export function Cockpit({
   const [showKeys, setShowKeys] = useState(false);
   const finishedRef = useRef(false);
   const timeScale = progress.timeScale;
+  // EASY MODE: time stops / slows at the moments to act, hints on request
+  const canEasy = !freeMode && def.mode !== 'race';
+  const [easy, setEasyS] = useState(() => {
+    try {
+      return localStorage.getItem('trimmaster.easy') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const setEasy = (v: boolean) => {
+    setEasyS(v);
+    try {
+      localStorage.setItem('trimmaster.easy', v ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  };
+  const easyOn = canEasy && easy;
+  const easyRef = useRef(easyOn);
+  easyRef.current = easyOn;
+  const usedEasyRef = useRef(false);
+  const coachRef = useRef(newCoach());
 
   const restart = useCallback(() => {
     runnerRef.current = new ScenarioRunner(def);
+    coachRef.current = newCoach();
+    usedEasyRef.current = false;
     finishedRef.current = false;
     setPaused(true);
     setStarted(false);
@@ -97,7 +123,12 @@ export function Cockpit({
       last = now;
       const r = runnerRef.current;
       if (!paused && !r.finished) {
-        acc += dtReal * timeScale;
+        let k = 1;
+        if (easyRef.current) {
+          usedEasyRef.current = true;
+          k = updateCoach(coachRef.current, r, now);
+        }
+        acc += dtReal * timeScale * k;
         while (acc >= DT) {
           r.step(DT);
           acc -= DT;
@@ -106,7 +137,7 @@ export function Cockpit({
       }
       if (r.finished && !finishedRef.current) {
         finishedRef.current = true;
-        onFinish(r.evaluate(), r);
+        onFinish(r.evaluate(), r, usedEasyRef.current);
       }
       if (++frame % 3 === 0) setTick((t) => (t + 1) % 1e9);
     };
@@ -179,6 +210,27 @@ export function Cockpit({
   );
 
   const chartMarks = useMemo(() => [], []);
+  const coach = coachRef.current.active;
+  const coachCard =
+    easyOn && coach ? (
+      <CoachCard
+        c={coach}
+        onHint={() => {
+          coach.hint = Math.min(coach.hints.length, coach.hint + 1);
+          setTick((t) => t + 1);
+        }}
+        onContinue={() => {
+          coach.done = true;
+          coach.doneReal = performance.now() - 2400;
+          setTick((t) => t + 1);
+        }}
+      />
+    ) : null;
+  const askHint = () => {
+    const r = runnerRef.current;
+    coachRef.current.active = { step: { id: `ask${Math.round(r.sim.t)}`, freeze: 'pause', title: L('What should I do now?', 'Que faire maintenant ?'), hints: [], done: (_s, _t) => false }, since: r.sim.t, hint: 1, hints: adviceHints(r), done: false };
+    setTick((t) => t + 1);
+  };
 
   return (
     <div className="space-y-3">
@@ -199,6 +251,18 @@ export function Cockpit({
             <div className="text-right">
               <div className="text-[10px] uppercase tracking-wider text-slate-400">{freeMode ? L('Session', 'Session') : L('Time left', 'Temps restant')}</div>
               <div className="num text-sm font-semibold text-white">{freeMode ? `${Math.floor(snap.t / 60)}:${String(Math.floor(snap.t % 60)).padStart(2, '0')}` : `${remaining.toFixed(0)} s`}</div>
+            </div>
+          )}
+          {canEasy && (
+            <div className="flex items-center gap-1">
+              <button onClick={() => setEasy(!easy)} title={L('Easy mode: time stops when you need to act, hints on request', 'Mode facile : le temps s’arrête quand il faut agir, indices à la demande')} className={`btn !px-2 !py-1 text-xs ${easy ? 'bg-good/25 text-good border border-good/40' : 'btn-ghost'}`}>
+                <GraduationCap size={13} /> {L('Easy', 'Facile')}
+              </button>
+              {easy && started && (
+                <button onClick={askHint} className="btn-ghost !px-2 !py-1 text-xs">
+                  <Lightbulb size={13} /> {L('Hint', 'Indice')}
+                </button>
+              )}
             </div>
           )}
           <div className="flex items-center gap-1">
@@ -263,7 +327,15 @@ export function Cockpit({
                 ))}
               </div>
             </div>
-            <div className="flex items-end">
+            <div className="flex flex-col items-stretch justify-end gap-2">
+              {canEasy && (
+                <button onClick={() => setEasy(!easy)} className={`rounded-lg border px-3 py-2 text-left text-xs ${easy ? 'border-good/50 bg-good/10 text-good' : 'border-cyan-300/20 text-slate-300 hover:border-cyan-300/50'}`}>
+                  <div className="flex items-center gap-1 font-semibold">
+                    <GraduationCap size={14} /> {L('Easy mode', 'Mode facile')} {easy ? L('ON', 'ACTIVÉ') : L('off', 'désactivé')}
+                  </div>
+                  <div className="mt-0.5 max-w-[240px] text-[11px] opacity-80">{L('Time stops (or slows) when you need to act; the coach says what is happening, hints on request. Half XP.', "Le temps s'arrête (ou ralentit) quand il faut agir ; le coach explique ce qui se passe, indices à la demande. XP divisée par deux.")}</div>
+                </button>
+              )}
               <button className="btn-primary px-6 py-3 text-base" onClick={() => (setPaused(false), setStarted(true))}>
                 <Play size={18} /> {L('Start', 'Démarrer')} <Kbd>{L('Space', 'Espace')}</Kbd>
               </button>
@@ -272,6 +344,7 @@ export function Cockpit({
         </div>
       )}
 
+      {view !== '3d' && coachCard}
       {/* ---------- prompts */}
       {prompts.length > 0 && (
         <div className="space-y-1">
@@ -413,7 +486,7 @@ export function Cockpit({
           {view === '3d' && (
             <div className="mb-2">
               <Suspense fallback={<div className="grid h-[520px] place-items-center text-sm text-slate-400">{L('Loading 3D…', 'Chargement 3D…')}</div>}>
-                <Boat3DView getSim={() => runnerRef.current.sim} snap={snap} assist={freeMode} />
+                <Boat3DView getSim={() => runnerRef.current.sim} snap={snap} assist={freeMode} overlay={coachCard} />
               </Suspense>
               <div className="mt-1 text-[10px] text-slate-500">{L('Drag to look around · drag a glowing handle to trim (car, clew, winch, halyard, forestay foot, mainsheet, traveller, vang, outhaul, cunningham, kite clew) · wheel to zoom in/out · double-click to reset · V view · F forces · B see-through jib', "Glisser pour regarder · glisser une poignée lumineuse pour régler (chariot, point d'écoute, winch, drisse, pied d'étai, écoute de GV, chariot de GV, hale-bas, bordure, cunningham, point d'écoute de spi) · molette pour zoomer · double-clic pour recadrer · V vue · F forces · B foc transparent")}</div>
             </div>

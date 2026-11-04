@@ -68,6 +68,8 @@ export interface SailResult {
   yawMoment: number; // N·m (+ = weather helm)
   force: number; // total aero force, N
   efficiency: number; // 0..1
+  /** 0..1 attached-flow measure for roll damping (a mild stall still damps) */
+  attached: number;
   /** pitching moment of the drive about the waterline, N·m (drive × height it acts at): bow-down */
   pitchMoment: number;
   cl: number;
@@ -240,6 +242,7 @@ function sectionCoeffs(alpha: number, depth: number, entry: number, groove: numb
   let cd = 0.018 + 0.25 * depth * depth;
   let flow: Flow = 'ok';
   let quality: number;
+  let attached: number | undefined;
   if (a < -7) {
     cl = 0.05;
     cd += 0.11;
@@ -257,12 +260,16 @@ function sectionCoeffs(alpha: number, depth: number, entry: number, groove: numb
     quality = t < 0.2 ? 0.75 + 1.25 * t : 1 - 0.15 * Math.max(0, (t - 0.85) / 0.15);
     flow = 'ok';
   } else {
+    // past the groove the leeward flow separates from the leech forward: the leeward telltales
+    // stall within a couple of degrees, lift stops growing and drag climbs fast
     const t = a - groove;
-    const s = Math.min(1, t / 12);
-    cl = clmax * (1 - 0.33 * s);
-    cd += 0.3 * s;
+    const s = Math.min(1, t / 10);
+    cl = clmax * (1 - 0.36 * s);
+    cd += 0.31 * s;
     flow = 'stall';
-    quality = clamp(0.85 - 0.75 * s, 0.05, 1);
+    quality = clamp(0.85 - 1.7 * s, 0.05, 1);
+    // still much of the cloth carries flow (and damps the roll) in a mild stall
+    attached = clamp(0.85 - 0.75 * s, 0.05, 1);
   }
   // high angle: lift decays, drag grows towards flat-plate values
   if (alpha > 38) {
@@ -270,7 +277,7 @@ function sectionCoeffs(alpha: number, depth: number, entry: number, groove: numb
     cd += 1.05 * clamp((alpha - 30) / 60, 0, 1);
     flow = 'stall';
   }
-  return { cl, cd, flow, quality, a };
+  return { cl, cd, flow, quality, a, attached: attached ?? quality };
 }
 
 const JIB_SECTIONS = [
@@ -312,6 +319,8 @@ interface SailCalcOpts {
   alphaShift: (h: number) => number;
   efficiencyFactor: number;
   extraCd: number;
+  /** 0..1: the luff is backwinded (bubbling) - low sections lose flow quality and lift */
+  luffBubble?: number;
   /** chord angle (deg from centreline) past which a section is forward of square: luffs and drags */
   chordLimit?: number;
   env: EnvInput;
@@ -325,6 +334,7 @@ function computeSail(o: SailCalcOpts): SailResult {
   let heelMoment = 0;
   let yawMoment = 0;
   let qual = 0;
+  let att = 0;
   let clSum = 0;
   let pitchMoment = 0;
   const jitterAmp = o.env.sea * 0.9;
@@ -337,12 +347,19 @@ function computeSail(o: SailCalcOpts): SailResult {
     const alpha = awa - o.shape.angle - o.shape.twist * s.h + o.alphaShift(s.h);
     const entry = entryAngle(depth, o.shape.draft);
     const k = sectionCoeffs(alpha, depth, entry, o.shape.groove);
+    if (o.luffBubble) {
+      // the jib's exit flow lands on the main's lee side: the luff bubbles (worst low down)
+      const b = clamp(o.luffBubble, 0, 1) * (1 - 0.55 * s.h);
+      k.quality *= 1 - 0.7 * b;
+      k.cl *= 1 - 0.12 * b;
+      if (b > 0.35 && k.flow === 'ok') k.flow = 'luff';
+    }
     // a section twisted past square (no vang downwind: the head goes forward of the beam) cannot
     // fly: it luffs, folds round the shrouds and only makes drag
     const over = o.chordLimit !== undefined ? Math.max(0, o.shape.angle + o.shape.twist * s.h - o.chordLimit) : 0;
     const cl = (k.cl * o.efficiencyFactor) / (1 + over / 8);
     // a hooked (over-tight) leech separates at the trailing edge, worse at low speed
-    const hook = o.shape.twist < 5 ? (5 - o.shape.twist) * 0.012 * (1 + clamp((10 - ap.aws) / 10, 0, 1)) * s.h : 0;
+    const hook = o.shape.twist < 5 ? (5 - o.shape.twist) * 0.02 * (1 + clamp((10 - ap.aws) / 10, 0, 1)) * s.h : 0;
     const cd = k.cd + o.extraCd + hook + over * 0.012 + (cl * cl) / (Math.PI * o.aspect);
     const q = 0.5 * RHO_AIR * (ap.aws * KN) ** 2;
     const A = o.area * s.w;
@@ -358,10 +375,11 @@ function computeSail(o: SailCalcOpts): SailResult {
     // CE moves aft as the sail stalls/eases (chordwise centre of pressure)
     yawMoment += fy * o.ceX + fx * Math.sin(o.st.heel * DEG) * z * 0.55;
     qual += k.quality * s.w;
+    att += k.attached * s.w;
     clSum += cl * s.w;
     sections.push({ h: s.h, z, awa, alpha, a: k.a, cl, cd, flow: k.flow, quality: k.quality });
   }
-  return { sections, drive, side, heelMoment, yawMoment, force: Math.hypot(drive, side), efficiency: qual, cl: clSum, pitchMoment };
+  return { sections, drive, side, heelMoment, yawMoment, force: Math.hypot(drive, side), efficiency: qual, attached: att, cl: clSum, pitchMoment };
 }
 
 // ---------------------------------------------------------------- hull
@@ -445,6 +463,7 @@ export function evaluate(
     chordLimit: 82,
     efficiencyFactor: lightShape,
     extraCd: 0.05 * backwindShift + 0.02 * shapes.mainLuffFold * breeze,
+    luffBubble: backwindShift,
     env,
     st: { v, heel: st.heel },
   });

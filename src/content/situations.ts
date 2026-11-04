@@ -708,14 +708,30 @@ export const SITUATIONS: ScenarioDef[] = [
       wind: wind(9, { seed: 41, gustiness: 0.2 }),
       sea: 0,
       twa: 40,
-      v: 4.3,
-      heel: 10,
+      // already settled at the choked speed: nothing improves unless the jib is fixed
+      v: 4.6,
+      heel: 9,
       controls: { ...optimalControls(9, 40), jibSheet: 1, jibLead: 0.15 },
     }),
     script: [{ at: 0.1, run: (c) => (c.mark('start'), c.prompt(L('Helm: "Feels sticky. Are we over-trimmed?"', 'Barreur : « Ça colle. On est sur-bordés ? »'), 'info', 5)) }],
     criteria: [
       reactionCriterion('react', L('Diagnosis: first jib ease', 'Diagnostic : premier choc de foc'), 'start', (a) => a.key === 'jibSheet' && (a.value ?? 1) < (a.from ?? 0), 2, 10, 1.3, 'Initial response'),
-      finalControlCriterion('jibSheet', L('Jib sheet back in the window', 'Écoute de foc revenue dans la plage'), 0.05, 1.5, 'Trim adjustments'),
+      {
+        id: 'final-jibSheet',
+        group: 'Trim adjustments',
+        label: L('Jib sheet back in the window', 'Écoute de foc revenue dans la plage'),
+        weight: 1.5,
+        evaluate: ({ sim }) => {
+          // block-to-block is only ~8 % of sheet away from the right trim: score it on that scale
+          const opt = optimalControls(sim.twsSmooth, Math.abs(sim.twa)).jibSheet;
+          const d = sim.controls.jibSheet - opt;
+          const word = Math.abs(d) <= 0.025 ? L('in the window', 'dans la plage') : d > 0 ? L('still over-trimmed', 'encore trop bordé') : L('too eased', 'trop choqué');
+          return {
+            score: clamp(100 - (Math.max(0, Math.abs(d) - 0.025) / 0.05) * 100, 0, 100),
+            note: L(`Ended at ${pct(sim.controls.jibSheet)} — reference ${pct(opt)} (${word}).`, `Fini à ${pct(sim.controls.jibSheet)} — référence ${pct(opt)} (${word}).`),
+          };
+        },
+      },
       {
         id: 'lead',
         group: 'Trim adjustments',
@@ -750,10 +766,10 @@ export const SITUATIONS: ScenarioDef[] = [
         evaluate: (ctx) => {
           const a = avgIn(ctx, 0, 3, (s) => s.perf);
           const b = avgIn(ctx, 25, 35, (s) => s.perf);
-          return { score: scoreLinear(b, 0.88, 0.98), note: L(`Performance ${pct(a)} → ${pct(b)}.`, `Performance ${pct(a)} → ${pct(b)}.`) };
+          return { score: scoreLinear(b, 0.94, 0.985), note: L(`Performance ${pct(a)} → ${pct(b)}.`, `Performance ${pct(a)} → ${pct(b)}.`) };
         },
       },
-      ...STANDARD({ speed: 0.6, heel: 0.3, rudder: 0.3, adjust: 1.3 }),
+      ...STANDARD({ speed: 0.8, heel: 0.2, rudder: 0.2, energy: 0.2, adjust: 0.8 }),
     ],
     expectedAdjustments: 4,
     energyBudget: 25,

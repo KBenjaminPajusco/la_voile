@@ -1,3 +1,4 @@
+import type React from 'react';
 // 3D trimmer's-eye view. Owns a WebGL canvas and a TrimmerScene; reads the live simulator in
 // its own animation loop and overlays a compact reading of telltales and sail forces.
 import { useEffect, useRef, useState } from 'react';
@@ -77,6 +78,7 @@ export default function Boat3DView({
   coach = true,
   assist = false,
   handleKeys,
+  overlay,
 }: {
   getSim: () => SnapSource;
   snap: Snapshot;
@@ -91,6 +93,8 @@ export default function Boat3DView({
   assist?: boolean;
   /** only these controls get a 3D handle */
   handleKeys?: ControlKey[];
+  /** extra UI drawn over the view (easy-mode coach card) - stays visible in full screen */
+  overlay?: React.ReactNode;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -408,6 +412,7 @@ export default function Boat3DView({
 
   return (
     <div ref={wrapRef} className={`relative w-full overflow-hidden rounded-lg border border-cyan-300/15 bg-navy-950 ${full ? '!rounded-none' : ''}`} style={{ height: full ? '100vh' : height }}>
+      {overlay && <div className="absolute left-1/2 top-12 z-20 w-[min(560px,92%)] -translate-x-1/2">{overlay}</div>}
       <canvas
         ref={canvasRef}
         className={`block h-full w-full touch-none ${hover ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'}`}

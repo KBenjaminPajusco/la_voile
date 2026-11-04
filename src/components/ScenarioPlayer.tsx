@@ -3,6 +3,7 @@ import type { RunResult, ScenarioDef } from '../sim/runner';
 import { Cockpit } from './Cockpit';
 import { Debrief } from './Debrief';
 import { useProgress, type ActivityKind } from '../store/progress';
+import { L } from '../i18n';
 
 export function ScenarioPlayer({ def, kind, onExit, freeMode = false }: { def: ScenarioDef; kind: ActivityKind; onExit: () => void; freeMode?: boolean }) {
   const { record } = useProgress();
@@ -10,7 +11,7 @@ export function ScenarioPlayer({ def, kind, onExit, freeMode = false }: { def: S
   const [runId, setRunId] = useState(0);
 
   const onFinish = useCallback(
-    (r: RunResult) => {
+    (r: RunResult, _runner?: unknown, easy = false) => {
       // a run ended almost immediately is not evaluated (no XP, not recorded)
       const evaluated = r.tel.filter((s) => s.t >= (def.evalFrom ?? 0)).length * 0.25;
       if (evaluated < 8) {
@@ -30,8 +31,8 @@ export function ScenarioPlayer({ def, kind, onExit, freeMode = false }: { def: S
       const tech = r.rows.filter((x) => ['Trim adjustments', 'Decision', 'Final balance', 'Preparation', 'Timing'].includes(x.group));
       if (tech.length) groups.technical = Math.round(tech.reduce((a, b) => a + b.score, 0) / tech.length);
       const rec = record(
-        { kind, refId: def.id, title: def.title, score: r.score, skills: def.skills, groups },
-        { xpBase: kind === 'race' ? 3 : kind === 'free' ? 0.5 : 1.3 + def.pressure * 0.3, level: def.level },
+        { kind, refId: def.id, title: easy ? `${def.title} · ${L('easy', 'facile')}` : def.title, score: r.score, skills: def.skills, groups },
+        { xpBase: (kind === 'race' ? 3 : kind === 'free' ? 0.5 : 1.3 + def.pressure * 0.3) * (easy ? 0.5 : 1), level: def.level },
       );
       setResult({ r, xp: rec.xp });
     },

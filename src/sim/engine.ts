@@ -552,7 +552,7 @@ export class Simulator {
     // Roll damping is mostly aerodynamic: attached sails resist rolling, stalled or flogging
     // sails don't. Downwind, an over-sheeted main or a stalled kite feeds the roll (death roll).
     const kiteUp = this.plan.headsail === 'gennaker';
-    const sailEff = kiteUp && f.gennaker ? 0.5 * f.main.efficiency + 0.5 * f.gennaker.efficiency : 0.5 * f.main.efficiency + 0.5 * (this.plan.jibReleased ? 0.3 : f.jib.efficiency);
+    const sailEff = kiteUp && f.gennaker ? 0.5 * f.main.attached + 0.5 * f.gennaker.attached : 0.5 * f.main.attached + 0.5 * (this.plan.jibReleased ? 0.3 : f.jib.attached);
     const deep = Math.abs(twaS) > 110;
     let zeta = 0.62 + 0.33 * clamp((sailEff - 0.35) / 0.45, 0, 1);
     let rollForce = 1;

@@ -7,6 +7,7 @@ import { useProgress } from '../store/progress';
 import { QUIZ_SCENES } from '../content/quizScenes';
 import { staticSource } from '../three/staticSnapshot';
 import { L } from '../i18n';
+import { InteractiveQuestion, QuizModeSwitch, useQuizMode } from './QuizInteractive';
 
 const Boat3DView = lazy(() => import('../components/Boat3DView'));
 
@@ -67,6 +68,7 @@ export function Quiz({ nav }: { nav: Nav; mode?: string }) {
   const { progress, isUnlocked, recordQuiz, setLast } = useProgress();
   const [cat, setCat] = useState<QuizCategory | 'all'>('all');
   const [session, setSession] = useState<Session | null>(null);
+  const [qmode, setQmode] = useQuizMode();
   const available = QUIZ.filter((q) => isUnlocked(q.level));
   const pool = available.filter((q) => cat === 'all' || q.category === cat);
   const locked = QUIZ.length - available.length;
@@ -83,6 +85,14 @@ export function Quiz({ nav }: { nav: Nav; mode?: string }) {
   return (
     <div>
       <PageHeader title={L('Knowledge Quiz', 'Quiz')} subtitle={L('Driving-school style situations: read the symptoms, make the call, understand the physics.', 'Des situations façon code de la route : lisez les symptômes, décidez, comprenez la physique.')} icon={<GraduationCap size={20} />} />
+      <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-cyan-300/15 bg-navy-900/50 px-3 py-2 text-sm text-slate-300">
+        <QuizModeSwitch mode={qmode} setMode={setQmode} />
+        <span className="text-xs text-slate-400">
+          {qmode === 'interactive'
+            ? L('Interactive: fix the trim yourself in 3D, then see what happened. Short texts, details on demand.', 'Interactif : corrige toi-même le réglage en 3D, puis vois ce qui s’est passé. Textes courts, détails à la demande.')
+            : L('Detailed: the full multiple-choice questions with every explanation.', 'Détaillé : le QCM complet avec toutes les explications.')}
+        </span>
+      </div>
       <div className="mb-4 flex flex-wrap gap-2">
         {CATS.map((c) => (
           <button key={c.id} onClick={() => setCat(c.id)} className={`btn !py-1.5 text-xs ${cat === c.id ? 'bg-cyan-400 text-navy-950' : 'btn-ghost'}`}>
@@ -152,6 +162,7 @@ function QuizRun({ session, setSession, onRecord, onExit }: { session: Session; 
   const [xp, setXp] = useState(0);
   const LIMIT = 25;
   const done = session.i >= session.qs.length;
+  const [mode, setMode] = useQuizMode();
 
   useEffect(() => {
     setPicked(null);
@@ -229,24 +240,51 @@ function QuizRun({ session, setSession, onRecord, onExit }: { session: Session; 
 
   const chosen = q.answers.find((a) => a.id === picked);
   const best = q.answers.find((a) => a.score === 100)!;
+  const next = () => setSession({ ...session, i: session.i + 1 });
+  const header = (
+    <div className="mb-3 flex items-center justify-between gap-2">
+      <button className="btn-ghost" onClick={onExit}>
+        {L('Quit', 'Quitter')}
+      </button>
+      <div className="flex flex-1 items-center gap-3 px-4">
+        <Bar value={session.i} max={session.qs.length} tone="info" />
+        <span className="num text-xs text-slate-400">
+          {session.i + 1}/{session.qs.length}
+        </span>
+      </div>
+      <QuizModeSwitch mode={mode} setMode={setMode} />
+      {session.timed && !picked && (
+        <span className={`num flex items-center gap-1 text-sm ${left < 8 ? 'text-alarm' : 'text-warn'}`}>
+          <Clock size={14} /> {left.toFixed(0)} s
+        </span>
+      )}
+    </div>
+  );
+  if (mode === 'interactive')
+    return (
+      <div className="mx-auto max-w-6xl">
+        {header}
+        <InteractiveQuestion
+          key={q.id}
+          q={q}
+          timed={session.timed}
+          timedOut={timedOut}
+          picked={picked}
+          onPick={answer}
+          onScore={(score) => {
+            if (picked) return;
+            setPicked('__fix');
+            setXp((x) => x + onRecord(q, score));
+            session.answers.push({ qid: q.id, aid: null, score, time: (Date.now() - qStart) / 1000 });
+          }}
+          onNext={next}
+          last={session.i + 1 >= session.qs.length}
+        />
+      </div>
+    );
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <button className="btn-ghost" onClick={onExit}>
-          {L('Quit', 'Quitter')}
-        </button>
-        <div className="flex flex-1 items-center gap-3 px-4">
-          <Bar value={session.i} max={session.qs.length} tone="info" />
-          <span className="num text-xs text-slate-400">
-            {session.i + 1}/{session.qs.length}
-          </span>
-        </div>
-        {session.timed && !picked && (
-          <span className={`num flex items-center gap-1 text-sm ${left < 8 ? 'text-alarm' : 'text-warn'}`}>
-            <Clock size={14} /> {left.toFixed(0)} s
-          </span>
-        )}
-      </div>
+      {header}
       <QuizScene3D qid={q.id} />
       <div className="grid gap-4 lg:grid-cols-[1fr_1.25fr]">
         <Panel title={`${L('L', 'N')}${q.level} · ${catLabel(q.category)}`}>
@@ -347,7 +385,7 @@ function QuizRun({ session, setSession, onRecord, onExit }: { session: Session; 
                   <p className="mt-1 text-slate-300">{q.whenItChanges}</p>
                 </div>
               </div>
-              <button className="btn-primary mt-4" onClick={() => setSession({ ...session, i: session.i + 1 })}>
+              <button className="btn-primary mt-4" onClick={next}>
                 {session.i + 1 < session.qs.length ? L('Next question', 'Question suivante') : L('See results', 'Voir les résultats')} <ArrowRight size={15} />
               </button>
             </Panel>

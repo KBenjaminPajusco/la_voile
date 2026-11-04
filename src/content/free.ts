@@ -40,7 +40,7 @@ export function buildFree(o: FreeOptions): ScenarioDef {
   const headsail = o.point === 'downwind' ? 'gennaker' : 'jib';
   const opt = optimalControls(o.tws, twa, headsail);
   let controls: Controls = opt;
-  if (o.start === 'neutral') controls = { ...NEUTRAL_UPWIND, jibSheet: o.point === 'upwind' ? 0.8 : 0.45, mainSheet: o.point === 'upwind' ? 0.8 : 0.35 };
+  if (o.start === 'neutral') controls = { ...NEUTRAL_UPWIND, jibSheet: o.point === 'upwind' ? 0.8 : 0.45, mainSheet: o.point === 'upwind' ? 0.9 : 0.35, traveller: o.point === 'upwind' ? 0.6 : 0.5 };
   if (o.start === 'bad') controls = { ...opt, jibSheet: o.point === 'upwind' ? 1 : 0.2, mainSheet: 1, traveller: 0.8, backstay: o.tws > 14 ? 0 : 1, outhaul: 0, vang: 0, hike: 0.2, jibLead: 0.1 };
   return {
     id: `free-${o.point}`,
