@@ -55,9 +55,9 @@ export const LESSONS_FR_HEADSAIL: Lesson[] = [
       tws: 10,
       twa: 42,
       presets: [
-        { name: 'Relance', description: `Foc choqué de quelques centimètres sous le repère : fente plus large, plus de vrillage, plus de propulsion à basse vitesse.`, controls: { jibSheet: 0.7, mainSheet: 0.7 } },
-        { name: 'Réglage cap', description: `Foc au repère, bateau lancé au près : chute près de la barre de flèche, fente parallèle.`, controls: { jibSheet: 0.85, mainSheet: 0.8 } },
-        { name: 'Sur-bordé', description: `Bordé à bloc dans 10 nœuds : haut fermé, fente étranglée, penons sous le vent qui décrochent.`, controls: { jibSheet: 1, mainSheet: 0.8 } },
+        { name: 'Relance', description: `Foc choqué de quelques centimètres sous le repère : fente plus large, plus de vrillage, plus de propulsion à basse vitesse.`, controls: { jibSheet: 0.7 } },
+        { name: 'Réglage cap', description: `Foc au repère, bateau lancé au près : chute près de la barre de flèche, fente parallèle.`, controls: { jibSheet: 0.85 } },
+        { name: 'Sur-bordé', description: `Bordé à bloc dans 10 nœuds : haut fermé, fente étranglée, penons sous le vent qui décrochent.`, controls: { jibSheet: 1 } },
       ],
     },
     check: [

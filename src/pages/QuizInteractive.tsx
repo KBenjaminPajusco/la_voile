@@ -5,8 +5,7 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, ChevronUp, Lightbulb, ListChecks, MousePointerClick, RotateCcw, Sparkles, Wind, XCircle } from 'lucide-react';
 import type { QuizQuestion } from '../content/types';
 import { QUIZ_SCENES } from '../content/quizScenes';
-import { staticSource } from '../three/staticSnapshot';
-import { optimalControls } from '../sim/polar';
+import { sceneOptimal, staticSource } from '../three/staticSnapshot';
 import { advise, explainChange, merit, solve, type ChangeReport } from '../sim/advisor';
 import type { Controls } from '../content/types';
 import { L } from '../i18n';
@@ -101,7 +100,7 @@ export function InteractiveQuestion(p: Props) {
   // can this question be answered by fixing the trim? (the scene shows a real trim error)
   const info = useMemo(() => {
     if (!spec || !lab || spec.jibReleased || spec.gennakerCollapsed || spec.interactive === false) return null;
-    const opt = optimalControls(spec.tws, Math.abs(spec.twa), lab.headsail);
+    const opt = sceneOptimal(spec);
     const best = solve(opt, spec.tws, spec.twa, lab.plan, lab.sea);
     const r0 = solve(lab.c0, spec.tws, spec.twa, lab.plan, lab.sea);
     const gap = merit(best) - merit(r0);
@@ -148,7 +147,7 @@ export function InteractiveQuestion(p: Props) {
   const [hintText, setHintText] = useState<string[]>([]);
   const askHint = () => {
     if (!lab) return;
-    const a = advise({ controls: lab.controls, tws: lab.tws, twa: lab.twa, plan: lab.plan, sea: lab.sea });
+    const a = advise({ controls: lab.controls, tws: lab.tws, twa: lab.twa, plan: lab.plan, sea: lab.sea, opt: info?.opt });
     setHintText([a.look, a.act, a.detail]);
     setHint((h) => Math.min(3, h + 1));
   };

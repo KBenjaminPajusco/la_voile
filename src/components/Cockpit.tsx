@@ -18,7 +18,7 @@ import {
 import type { ControlKey } from '../content/types';
 import { ScenarioRunner, type RunResult, type ScenarioDef } from '../sim/runner';
 import type { CrewCall, HelmMode } from '../sim/engine';
-import { ArcGauge, BoatTopView, SailSections, SternView, Telltales } from './visuals';
+import { ArcGauge, BoatTopView, SailSections, SlotCoherence, SternView, Telltales } from './visuals';
 import { ControlSlider } from './ControlSlider';
 import { Bar, Chip, Kbd, Sparkline, toneText } from '../ui/kit';
 import { useProgress } from '../store/progress';
@@ -496,13 +496,14 @@ export function Cockpit({
               {view === 'top' ? (
                 <BoatTopView twa={snap.twa} awa={snap.awa} tws={snap.tws} aws={snap.aws} heel={snap.heel} f={f} headsail={snap.plan.headsail} backed={snap.plan.jibBacked} released={snap.plan.jibReleased} collapsed={snap.plan.gennakerCollapsed} gust={snap.gust} />
               ) : (
-                <div className="grid h-full grid-cols-2 gap-2">
+                <div className={`grid h-full gap-2 ${isKite ? 'grid-cols-2' : 'grid-cols-3'}`}>
                   {isKite && f.gennaker ? (
                     <SailSections shape={f.shapes.gennaker} sections={f.gennaker.sections} label={L('GENNAKER', 'SPI')} height={380} />
                   ) : (
                     <SailSections shape={f.shapes.jib} sections={f.jib.sections} label={L('JIB', 'FOC')} height={380} />
                   )}
                   <SailSections shape={f.shapes.main} sections={f.main.sections} label={L('MAIN', 'GV')} height={380} />
+                  {!isKite && <SlotCoherence f={f} height={380} />}
                 </div>
               )}
             </div>}

@@ -176,6 +176,8 @@ export interface AdviceInput {
   keys?: ControlKey[];
   /** stronger wind about to arrive (puff on the water): advise for it */
   upcoming?: { tws: number; inSec: number };
+  /** the trim to steer towards (default: the polar optimum) */
+  opt?: Controls;
 }
 
 function symptom(b: BoatReading, key: ControlKey, kite: boolean): string {
@@ -201,7 +203,7 @@ export function advise(inp: AdviceInput): Advice {
   const kite = inp.plan.headsail === 'gennaker';
   const tws = inp.upcoming && inp.upcoming.tws > inp.tws + 2 ? inp.upcoming.tws : inp.tws;
   const now = solve(inp.controls, tws, inp.twa, inp.plan, inp.sea);
-  const opt = optimalControls(tws, Math.abs(inp.twa), inp.plan.headsail);
+  const opt = inp.opt ?? optimalControls(tws, Math.abs(inp.twa), inp.plan.headsail);
   const keys = (inp.keys ?? (Object.keys(opt) as ControlKey[])).filter((k) => !(kite && (k === 'jibLead' || k === 'jibHalyard')));
   const m0 = merit(now);
   let best: { k: ControlKey; v: number; gain: number; r: BoatReading } | null = null;
@@ -286,3 +288,24 @@ export function explainChange(before: Controls, after: Controls, rb: BoatReading
 }
 
 export { merit };
+
+const mainOnCache = new Map<string, Controls>();
+/** Optimal trim with the mainsheet held at 90 % (boom near the centreline, out of the trimmer's face) and the
+ *  traveller re-optimised to compensate: same speed upwind, used where the lesson / question is about the jib. */
+export function mainOnControls(tws: number, twa: number, plan: SailPlanState, sea = 0): Controls {
+  const opt = optimalControls(tws, Math.abs(twa), plan.headsail);
+  if (plan.headsail !== 'jib' || Math.abs(twa) > 70 || opt.mainSheet >= 0.9) return opt;
+  const key = `${tws.toFixed(1)}|${Math.abs(twa).toFixed(0)}|${sea}`;
+  const hit = mainOnCache.get(key);
+  if (hit) return { ...hit };
+  let best = { m: -Infinity, c: opt };
+  for (let tr = 0; tr <= 1.0001; tr += 0.05) {
+    const c = { ...opt, mainSheet: 0.9, traveller: tr };
+    const m = merit(solve(c, tws, twa, plan, sea));
+    if (m > best.m) best = { m, c };
+  }
+  // only if it costs (almost) nothing
+  const out = best.m >= merit(solve(opt, tws, twa, plan, sea)) - 0.01 ? best.c : opt;
+  mainOnCache.set(key, out);
+  return { ...out };
+}

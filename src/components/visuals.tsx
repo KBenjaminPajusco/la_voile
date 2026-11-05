@@ -184,6 +184,97 @@ export function SailSections({
   );
 }
 
+// ---------------------------------------------------------------- jib / main coherence
+
+/** one sail section in boat metres (x forward from the mast, y to leeward), luff first */
+function sectionPts(lx: number, angDeg: number, chord: number, depth: number, draft: number, n = 18): [number, number][] {
+  const a = angDeg * DEG;
+  const u = [-Math.cos(a), Math.sin(a)];
+  const nv = [Math.sin(a), Math.cos(a)];
+  const out: [number, number][] = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const f = t < draft ? 1 - ((draft - t) / draft) ** 2 : 1 - ((t - draft) / (1 - draft)) ** 2;
+    const c = depth * chord * f;
+    out.push([lx + chord * t * u[0] + c * nv[0], chord * t * u[1] + c * nv[1]]);
+  }
+  return out;
+}
+
+/** The jib and the main seen as the two skins of ONE wing: the jib is the leeward skin at the front, the main
+ *  the windward skin behind it. The dashed lines close the imaginary wing (leading edge from the jib luff to the
+ *  mast, trailing edge from the jib leech to the main leech). Coherent = the jib leech runs parallel to the main
+ *  (an even slot); choked = it points into the main (backwind); open = the two skins split apart. */
+export function SlotCoherence({ f, height = 230 }: { f: ForceResult; height?: number }) {
+  const sh = f.shapes;
+  const jr = [...f.jib.sections].reverse();
+  const mr = [...f.main.sections].reverse();
+  const depthOf = (s: SailShape, h: number) => (h < 0.3 ? s.depthBottom : h > 0.7 ? s.depthTop : s.depth);
+  const rows = jr.map((js, i) => {
+    const ms = mr[i] ?? mr[mr.length - 1];
+    const ja = sh.jib.angle + sh.jib.twist * js.h;
+    const ma = sh.main.angle + sh.main.twist * ms.h;
+    const jib = sectionPts(2.9 * (1 - 0.92 * js.h), ja, 3.25 * (1 - js.h) + 0.15, depthOf(sh.jib, js.h), sh.jib.draft);
+    const main = sectionPts(0, ma, 3.5 * (1 - 0.72 * ms.h) + 0.15, depthOf(sh.main, ms.h), sh.main.draft);
+    return { js, ms, ja, ma, jib, main };
+  });
+  // one scale for all three rows (fit the widest), so the heights compare
+  const xs = rows.flatMap((r) => [...r.jib, ...r.main].map((p) => p[0]));
+  const ysAll = rows.flatMap((r) => [...r.jib, ...r.main].map((p) => p[1]));
+  const xMax = Math.max(...xs);
+  const xMin = Math.min(...xs);
+  const SC = Math.min(186 / (xMax - xMin), 44 / Math.max(0.5, Math.max(...ysAll)));
+  const X = (x: number) => 8 + (xMax - x) * SC;
+  const Y = (y0: number, y: number) => y0 + y * SC;
+  return (
+    <svg viewBox="0 0 200 240" width="100%" height={height}>
+      <text x={6} y={12} fontSize={10} fill="#67e8f9" letterSpacing={1.5}>
+        {L('JIB + MAIN = ONE WING', 'FOC + GV = UNE AILE')}
+      </text>
+      {rows.map(({ js, ms, ja, ma, jib, main }, i) => {
+        const y0 = 30 + i * 72;
+        const slot = ja - ma + 1.5;
+        const state = slot < 3.5 ? 'choked' : slot < 6 ? 'closed' : slot <= 11 ? 'ok' : 'open';
+        const col = state === 'ok' ? '#34d399' : state === 'choked' ? '#ef4444' : '#f59e0b';
+        const word =
+          state === 'ok' ? L('coherent', 'cohérent') : state === 'choked' ? L('choked — main backwinded', 'étranglé — GV en contre-vent') : state === 'closed' ? L('closing', 'se ferme') : L('skins split — too open', 'les faces s’écartent');
+        const jl = jib[jib.length - 1];
+        const ml = main[main.length - 1];
+        // gap: jib leech to the main
+        const gap = Math.min(...main.map((p) => Math.hypot(p[0] - jl[0], p[1] - jl[1])));
+        // where the jib's exit flow goes: its leech tangent carried on to the main leech station
+        const jp = jib[jib.length - 2];
+        const dx = jl[0] - jp[0];
+        const dy = jl[1] - jp[1];
+        const k = (ml[0] - jl[0]) / dx;
+        const ex = [jl[0] + dx * k, jl[1] + dy * k];
+        const P = (pts: [number, number][]) => pts.map((p, j) => `${j ? 'L' : 'M'}${X(p[0]).toFixed(1)},${Y(y0, p[1]).toFixed(1)}`).join(' ');
+        const wing = `${P(jib)} L${X(ml[0]).toFixed(1)},${Y(y0, ml[1]).toFixed(1)} ${P([...main].reverse()).replace('M', 'L')} Z`;
+        return (
+          <g key={i}>
+            <line x1={4} y1={y0} x2={196} y2={y0} stroke="rgba(148,163,184,0.18)" strokeDasharray="2 3" />
+            <path d={wing} fill={col} fillOpacity={0.12} stroke="none" />
+            {/* the invisible lines: leading edge (jib luff → mast) and trailing edge (jib leech → main leech) */}
+            <line x1={X(jib[0][0])} y1={Y(y0, jib[0][1])} x2={X(0)} y2={Y(y0, 0)} stroke={col} strokeWidth={1} strokeDasharray="3 2" opacity={0.8} />
+            <line x1={X(jl[0])} y1={Y(y0, jl[1])} x2={X(ml[0])} y2={Y(y0, ml[1])} stroke={col} strokeWidth={1} strokeDasharray="3 2" opacity={0.8} />
+            {/* the jib's exit flow carried on */}
+            <line x1={X(jl[0])} y1={Y(y0, jl[1])} x2={X(ex[0])} y2={Y(y0, ex[1])} stroke="#e2e8f0" strokeWidth={0.8} strokeDasharray="1 2" opacity={0.7} />
+            <path d={P(main)} fill="none" stroke={flowColor[ms.flow]} strokeWidth={2.6} strokeLinecap="round" />
+            <path d={P(jib)} fill="none" stroke={flowColor[js.flow]} strokeWidth={2.6} strokeLinecap="round" />
+            <circle cx={X(0)} cy={Y(y0, 0)} r={2} fill="#0f172a" stroke="#e2e8f0" strokeWidth={0.8} />
+            <text x={196} y={y0 - 10} textAnchor="end" fontSize={8.5} fill="#cbd5e1" className="num">
+              {TML[i]} · {L('slot', 'fente')} {slot.toFixed(0)}° · {Math.round(gap * 100)} cm
+            </text>
+            <text x={196} y={y0 + 55} textAnchor="end" fontSize={8.5} fill={col} className="num">
+              {word}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 // ---------------------------------------------------------------- telltales
 
 function telltaleState(sec: SectionResult, groove: number) {

@@ -16,6 +16,7 @@ const VIEWS: { id: CamView; label: string }[] = [
   { id: 'main', label: L('Main', 'GV') },
   { id: 'helm', label: L('Helm', 'Barreur') },
   { id: 'chase', label: L('Chase', 'Poursuite') },
+  { id: 'astern', label: L('Astern', 'Arrière') },
 ];
 
 function readTT(snap: Snapshot) {

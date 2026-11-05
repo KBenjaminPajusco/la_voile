@@ -68,9 +68,9 @@ const HEADSAIL: Lesson[] = [
       tws: 10,
       twa: 42,
       presets: [
-        { name: 'Accelerating', description: `Jib eased a few centimetres off the mark: wider slot, more twist, more drive at low speed.`, controls: { jibSheet: 0.7, mainSheet: 0.7 } },
-        { name: 'Pointing trim', description: `Jib on the mark for full speed upwind: leech near the spreader, slot parallel.`, controls: { jibSheet: 0.85, mainSheet: 0.8 } },
-        { name: 'Over-trimmed', description: `Block-to-block in 10 kn: top closed, slot choked, leeward telltales stalling.`, controls: { jibSheet: 1, mainSheet: 0.8 } },
+        { name: 'Accelerating', description: `Jib eased a few centimetres off the mark: wider slot, more twist, more drive at low speed.`, controls: { jibSheet: 0.7 } },
+        { name: 'Pointing trim', description: `Jib on the mark for full speed upwind: leech near the spreader, slot parallel.`, controls: { jibSheet: 0.85 } },
+        { name: 'Over-trimmed', description: `Block-to-block in 10 kn: top closed, slot choked, leeward telltales stalling.`, controls: { jibSheet: 1 } },
       ],
     },
     check: [

@@ -6,6 +6,20 @@ import { J80_PROFILE } from '../sim/boatProfile';
 import type { Snapshot } from '../sim/engine';
 import { DEFAULT_PLAN, KN, clamp, steadyState, type SailPlanState, type SteadyResult } from '../sim/physics';
 import { optimalControls, targetSpeed } from '../sim/polar';
+import { mainOnControls } from '../sim/advisor';
+
+/** a scene about the jib (only jib controls are wrong): the main is sheeted at 90 % with the traveller down,
+ *  so the boom is not in the trimmer's face */
+export function sceneIsJib(spec: QuizScene): boolean {
+  const keys = [...Object.keys(spec.delta ?? {}), ...Object.keys(spec.set ?? {})];
+  return (spec.headsail ?? 'jib') === 'jib' && keys.length > 0 && keys.every((k) => k.startsWith('jib'));
+}
+
+/** the good trim for a scene's wind (what the player is aiming for) */
+export function sceneOptimal(spec: QuizScene, tws = spec.tws, twa = spec.twa): Controls {
+  const headsail = spec.headsail ?? 'jib';
+  return sceneIsJib(spec) ? mainOnControls(tws, twa, { ...DEFAULT_PLAN, headsail, crewFore: spec.crewFore ?? 0 }, spec.sea ?? 0) : optimalControls(tws, Math.abs(twa), headsail);
+}
 
 export interface SnapshotSource {
   sea: number;
@@ -29,7 +43,7 @@ export interface QuizLab extends SnapshotSource {
 
 export function staticSource(spec: QuizScene): QuizLab {
   const headsail = spec.headsail ?? 'jib';
-  const base = optimalControls(spec.trimTws ?? spec.tws, Math.abs(spec.trimTwa ?? spec.twa), headsail);
+  const base = sceneOptimal(spec, spec.trimTws ?? spec.tws, spec.trimTwa ?? spec.twa);
   const c0: Controls = { ...base };
   for (const [k, d] of Object.entries(spec.delta ?? {})) (c0 as any)[k] = clamp((c0 as any)[k] + (d as number), 0, 1);
   Object.assign(c0, spec.set ?? {});

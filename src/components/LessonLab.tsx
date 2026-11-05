@@ -4,6 +4,7 @@ import type { ControlKey, Controls, LabFocus, Lesson } from '../content/types';
 import { J80_PROFILE } from '../sim/boatProfile';
 import { DEFAULT_PLAN, steadyState, type SteadyResult } from '../sim/physics';
 import { optimalControls, targetSpeed } from '../sim/polar';
+import { mainOnControls } from '../sim/advisor';
 import { CONTROL_RATES } from '../sim/engine';
 import { LessonDiagram } from './diagrams';
 import { Panel } from '../ui/kit';
@@ -106,7 +107,9 @@ export function LessonLab({ lesson }: { lesson: Lesson }) {
   // unspecified controls start from a good trim for the lab conditions (jib upwind model)
   const headsail = lab.headsail ?? 'jib';
   const plan = { ...DEFAULT_PLAN, headsail };
-  const baseFor = (tws: number, twa: number) => optimalControls(tws, twa, headsail);
+  // jib lessons: main sheeted at 90 % (traveller compensates) so the boom is not in the trimmer's face
+  const jibFocus = headsail === 'jib' && lab.controls.some((k) => k.startsWith('jib')) && !lab.controls.includes('traveller');
+  const baseFor = (tws: number, twa: number) => (jibFocus ? mainOnControls(tws, twa, plan) : optimalControls(tws, twa, headsail));
   const base = baseFor(lab.tws, lab.twa);
   const initial = useMemo(() => ({ ...base, ...(lab.presets[0]?.controls ?? {}) }), [lesson.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [c, setC] = useState<Controls>(initial);

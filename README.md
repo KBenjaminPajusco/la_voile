@@ -32,7 +32,7 @@ C'est un site 100 % statique (aucun serveur) : chaque push sur `main` est constr
 - **Tableau de bord** : niveau, XP, performances récentes, compétences à travailler, exercice recommandé.
 - **École de voile** : 27 leçons (foc, GV, comportement du bateau), chacune avec la physique, les interactions entre
   réglages, les erreurs fréquentes, des questions, et un **labo interactif en 3D** (mêmes voiles que le simulateur,
-  pilotées par les curseurs ; les poignées 3D bougent les curseurs).
+  pilotées par les curseurs ; les poignées 3D bougent les curseurs). Les sections de voiles ont un 3ᵉ schéma, « foc + GV = une aile », qui montre si les deux voiles forment bien les deux faces d’un même profil.
 - **Quiz** : 38 situations, chacune montrée en 3D, avec réponses notées, conséquences et « quand la réponse change ».
 - **Mises en situation** : 8 scénarios sous pression (surtoilé, relance après virement, risée soudaine, spi à la limite…).
   Les risées se voient arriver sur l'eau ~10 s avant de toucher le bateau.
@@ -40,7 +40,7 @@ C'est un site 100 % statique (aucun serveur) : chaque push sur `main` est constr
 - **Simulateur** : entraînement libre et 3 match races, vue 3D depuis la place du régleur :
   - penons sur les deux faces du foc (vus par des fenêtres transparentes), penons de chute, guindant du spi qui roule
     quand on choque trop ;
-  - caméras régleur / sous le vent / GV / barreur / poursuite, inertie de la tête, flèches de force (propulsion / gîte) ;
+  - caméras régleur / sous le vent / GV / barreur / poursuite / arrière (la GV vue pile de derrière), inertie de la tête, flèches de force (propulsion / gîte) ;
   - poignées 3D sur chaque réglage, avec une jauge (actuel / visé / optimal) ;
   - **équipage auto** (les voiles sont réglées pour toi, tu barres) et **mode jeu** (barre à la souris, tu prends
     n'importe quel réglage : clic gauche border, clic droit choquer).

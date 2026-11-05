@@ -2,7 +2,7 @@
 // so the drawings change as the learner moves the controls.
 import type { Controls, DiagramKind } from '../content/types';
 import type { SteadyResult } from '../sim/physics';
-import { BoatTopView, SailSections, SternView, Telltales } from './visuals';
+import { BoatTopView, SailSections, SlotCoherence, SternView, Telltales } from './visuals';
 import { L } from '../i18n';
 
 const DEG = Math.PI / 180;
@@ -14,11 +14,13 @@ export function LessonDiagram({ kind, res, c, tws, twa, module }: { kind: Diagra
     case 'draft':
     case 'aoa':
       return (
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <SailSections shape={f.shapes.jib} sections={f.jib.sections} label={L('JIB SECTIONS', 'SECTIONS DU FOC')} height={300} />
           <SailSections shape={f.shapes.main} sections={f.main.sections} label={L('MAIN SECTIONS', 'SECTIONS DE GV')} height={300} />
-          <p className="col-span-2 text-[11px] text-slate-400">
-            {L("Bow to the left, leeward down. Grey arrows: apparent wind at each height (it swings aft aloft — wind gradient). Each section's colour shows its flow: cyan attached, amber luffing, red stalled.", 'Étrave à gauche, sous le vent en bas. Flèches grises : vent apparent à chaque hauteur (il adonne en altitude — gradient de vent). La couleur de chaque section montre son écoulement : cyan attaché, ambre qui fasseye, rouge décroché.')} {kind === 'twist' ? L('Twist = how much further eased the top section is than the foot.', 'Vrillage = de combien la section haute est plus choquée que le bas.') : kind === 'draft' ? L('Draft depth & position: where the deepest part of the curve sits.', 'Creux et position du creux : où se situe la partie la plus profonde du profil.') : L('Angle of attack = AWA − sheeting angle.', 'Angle d’incidence = AWA − angle de bordé.')}
+          <SlotCoherence f={f} height={300} />
+          <p className="col-span-3 text-[11px] text-slate-400">
+            {L("Bow to the left, leeward down. Grey arrows: apparent wind at each height (it swings aft aloft — wind gradient). Each section's colour shows its flow: cyan attached, amber luffing, red stalled.", 'Étrave à gauche, sous le vent en bas. Flèches grises : vent apparent à chaque hauteur (il adonne en altitude — gradient de vent). La couleur de chaque section montre son écoulement : cyan attaché, ambre qui fasseye, rouge décroché.')} {kind === 'twist' ? L('Twist = how much further eased the top section is than the foot.', 'Vrillage = de combien la section haute est plus choquée que le bas.') : kind === 'draft' ? L('Draft depth & position: where the deepest part of the curve sits.', 'Creux et position du creux : où se situe la partie la plus profonde du profil.') : L('Angle of attack = AWA − sheeting angle.', 'Angle d’incidence = AWA − angle de bordé.')}{' '}
+            {L('Right: the jib and the main are the two skins of one wing. The dashed lines close it (jib luff → mast, jib leech → main leech): coherent when the jib leech runs parallel to the main (green), choked when it points into the main (red, main backwinded), split when the skins diverge (amber).', 'À droite : le foc et la GV sont les deux faces d’une même aile. Les pointillés la referment (guindant du foc → mât, chute du foc → chute de GV) : cohérent quand la chute du foc court parallèle à la GV (vert), étranglé quand elle pointe dans la GV (rouge, GV en contre-vent), ouvert quand les faces s’écartent (ambre).')}
           </p>
         </div>
       );
@@ -35,8 +37,11 @@ export function LessonDiagram({ kind, res, c, tws, twa, module }: { kind: Diagra
     case 'slot':
       return (
         <div className="grid gap-3 sm:grid-cols-[1fr_200px]">
-          <div className="mx-auto aspect-square w-full max-w-[320px]">
-            <BoatTopView twa={twa} awa={f.awa} tws={tws} aws={f.aws} heel={res.heel} f={f} headsail="jib" compact />
+          <div className="grid grid-cols-2 gap-2">
+            <div className="mx-auto aspect-square w-full max-w-[320px]">
+              <BoatTopView twa={twa} awa={f.awa} tws={tws} aws={f.aws} heel={res.heel} f={f} headsail="jib" compact />
+            </div>
+            <SlotCoherence f={f} height={300} />
           </div>
           <div className="space-y-2 text-sm">
             <Big label={L('Slot angle', 'Angle de fente')} value={`${f.shapes.slot.toFixed(1)}°`} tone={f.shapes.slot < 2.5 ? 'alarm' : 'good'} />

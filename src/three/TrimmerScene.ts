@@ -39,7 +39,7 @@ import {
   type RibbonDrive,
 } from './j80Model';
 
-export type CamView = 'trimmer' | 'leeward' | 'main' | 'helm' | 'chase';
+export type CamView = 'trimmer' | 'leeward' | 'main' | 'helm' | 'chase' | 'astern';
 
 const DEG = Math.PI / 180;
 const jibChord = (h: number) => 3.05 * Math.pow(1 - h, 0.95) + 0.12 * h;
@@ -1115,6 +1115,22 @@ export class TrimmerScene {
       cam.position.copy(centre).addScaledVector(back, 13 + this.look.dolly * 1.5).add(new THREE.Vector3(0, 2.5 + this.look.pitch * 10 + this.look.dolly * 0.4, 0));
       cam.up.set(0, 1, 0);
       cam.lookAt(centre);
+      cam.fov = this.look.fov;
+      cam.updateProjectionMatrix();
+      for (const c of this.crew) c.visible = true;
+      return;
+    }
+    if (view === 'astern') {
+      // a chase boat dead astern, on the boat's centreline, at boom height-ish: the main seen from
+      // straight behind - its sections, the twist up the leech and the slot with the jib
+      const hr = this.headingS * DEG;
+      const back = new THREE.Vector3(-Math.sin(hr), 0, Math.cos(hr));
+      back.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.look.yaw);
+      const aim = this.boat.localToWorld(new THREE.Vector3(-0.6, DECK + 3.9, 0));
+      cam.position.copy(aim).addScaledVector(back, 10 + this.look.dolly * 1.5);
+      cam.position.y = this.boat.position.y + DECK + 2.7 + this.look.pitch * 10 + this.look.dolly * 0.4;
+      cam.up.set(0, 1, 0);
+      cam.lookAt(aim);
       cam.fov = this.look.fov;
       cam.updateProjectionMatrix();
       for (const c of this.crew) c.visible = true;
