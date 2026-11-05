@@ -224,15 +224,23 @@ export class KiteMold {
       done[b] = true;
       const hh = b / bands;
       // the curl is strongest mid-luff and grows with the ease; it flickers with the gusts of pressure
-      const amount = k.curl * Math.pow(Math.sin(Math.PI * Math.min(0.98, Math.max(0.02, hh))), 0.8) * (0.9 + 0.1 * Math.sin(k.time * 2.7 + hh * 5));
+      // ...and fades out smoothly towards the head and the tack, where the chord is tiny and the cloth is held
+      const ends = THREE.MathUtils.smoothstep(hh, 0.1, 0.3) * THREE.MathUtils.smoothstep(1 - hh, 0.12, 0.32);
+      const amount = k.curl * ends * Math.pow(Math.sin(Math.PI * Math.min(0.98, Math.max(0.02, hh))), 0.8) * (0.9 + 0.1 * Math.sin(k.time * 2.7 + hh * 5));
       if (amount < 0.02) return (cache[b] = null), null;
       const tc = Math.min(0.42, 0.05 + 0.24 * Math.min(1.2, amount));
       this.sample(hh, tc, A);
       this.sample(hh, Math.max(0, tc - 0.03), B);
       U.subVectors(A, B).normalize(); // along the chord, pointing aft
-      this.sample(Math.min(1, hh + 0.03), tc, tmp);
-      Hh.subVectors(tmp, A).normalize();
-      N.crossVectors(Hh, U).normalize();
+      // up the luff: central difference, kept inside the sail (at the head a one-sided step is zero)
+      this.sample(Math.min(1, hh + 0.04), tc, tmp);
+      this.sample(Math.max(0, hh - 0.04), tc, Hh);
+      Hh.subVectors(tmp, Hh);
+      if (Hh.lengthSq() < 1e-8) return (cache[b] = null), null;
+      Hh.normalize();
+      N.crossVectors(Hh, U);
+      if (N.lengthSq() < 1e-8 || !Number.isFinite(U.x)) return (cache[b] = null), null;
+      N.normalize();
       if (Math.sign(N.z) === Math.sign(k.side)) N.negate(); // windward
       this.sample(hh, 1, tmp);
       const chord = tmp.distanceTo(this.sample(hh, 0, B));
