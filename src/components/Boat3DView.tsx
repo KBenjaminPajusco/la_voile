@@ -277,7 +277,25 @@ export default function Boat3DView({
     const r = canvasRef.current!.getBoundingClientRect();
     return { x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1, w: r.width, h: r.height, px: e.clientX - r.left, py: e.clientY - r.top };
   };
+  // two fingers on a phone: pinch to zoom (the page itself does not zoom: the canvas is touch-none)
+  const touches = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<number | null>(null);
+  const spread = () => {
+    const [a, b] = [...touches.current.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  };
   const onDown = (e: React.PointerEvent) => {
+    if (e.pointerType === 'touch') {
+      touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (touches.current.size === 2) {
+        // second finger: stop the look-around / handle drag, start pinching
+        onUp();
+        pinch.current = spread();
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        return;
+      }
+      if (touches.current.size > 2) return;
+    }
     const sc = sceneRef.current;
     const sim = getSimRef.current();
     // GAME: click a handle to SELECT that control (it is yours from then on). Then click and hold
@@ -322,6 +340,16 @@ export default function Boat3DView({
     }
   };
   const onMove = (e: React.PointerEvent) => {
+    if (e.pointerType === 'touch' && touches.current.has(e.pointerId)) {
+      touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch.current !== null && touches.current.size >= 2) {
+        const d = spread();
+        // fingers apart = zoom in (like scrolling the wheel up)
+        zoomBy((pinch.current - d) * 1.6);
+        pinch.current = d;
+        return;
+      }
+    }
     const sc = sceneRef.current;
     if (!sc) return;
     const n = ndc(e);
@@ -389,24 +417,37 @@ export default function Boat3DView({
     grab.current = null;
     if (sceneRef.current) sceneRef.current.gauge = null;
   };
+  const onPointerEnd = (e: React.PointerEvent) => {
+    if (e.pointerType === 'touch') {
+      touches.current.delete(e.pointerId);
+      if (pinch.current !== null) {
+        // end of a pinch: the remaining finger does not start a look-around until it lifts
+        if (touches.current.size < 2) pinch.current = null;
+        drag.current = null;
+        return;
+      }
+    }
+    onUp();
+  };
   const resetLook = () => {
     const sc = sceneRef.current;
     if (sc) Object.assign(sc.look, { yaw: 0, pitch: 0, fov: 72, dolly: 0 });
   };
-  const onWheel = (e: React.WheelEvent) => {
+  // zoom: in with the lens, out by stepping back (up to ~16 m) to see every handle. Shared by the
+  // mouse wheel and the two-finger pinch on a phone. lens = change only the lens (ctrl + wheel)
+  const zoomBy = (deltaY: number, lens = false) => {
     const sc = sceneRef.current;
     if (!sc) return;
-    // wheel: zoom in with the lens, zoom out by stepping back (up to ~16 m) to see every handle;
-    // ctrl + wheel always changes the lens
-    if (e.ctrlKey) sc.look.fov = Math.max(28, Math.min(95, sc.look.fov + e.deltaY * 0.03));
-    else if (e.deltaY > 0) {
-      if (sc.look.fov < 72) sc.look.fov = Math.min(72, sc.look.fov + e.deltaY * 0.03);
-      else sc.look.dolly = Math.min(16, sc.look.dolly + e.deltaY * 0.01);
+    if (lens) sc.look.fov = Math.max(28, Math.min(95, sc.look.fov + deltaY * 0.03));
+    else if (deltaY > 0) {
+      if (sc.look.fov < 72) sc.look.fov = Math.min(72, sc.look.fov + deltaY * 0.03);
+      else sc.look.dolly = Math.min(16, sc.look.dolly + deltaY * 0.01);
     } else {
-      if (sc.look.dolly > 0) sc.look.dolly = Math.max(0, sc.look.dolly + e.deltaY * 0.01);
-      else sc.look.fov = Math.max(28, sc.look.fov + e.deltaY * 0.03);
+      if (sc.look.dolly > 0) sc.look.dolly = Math.max(0, sc.look.dolly + deltaY * 0.01);
+      else sc.look.fov = Math.max(28, sc.look.fov + deltaY * 0.03);
     }
   };
+  const onWheel = (e: React.WheelEvent) => zoomBy(e.deltaY, e.ctrlKey);
 
   const f = snap.f;
   const kite = snap.plan.headsail === 'gennaker';
@@ -431,8 +472,8 @@ export default function Boat3DView({
         className={`block h-full w-full touch-none ${hover ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'}`}
         onPointerDown={onDown}
         onPointerMove={onMove}
-        onPointerUp={onUp}
-        onPointerCancel={onUp}
+        onPointerUp={onPointerEnd}
+        onPointerCancel={onPointerEnd}
         onPointerLeave={() => gameRef.current && getSimRef.current().setHelmCmd?.(0)}
         onContextMenu={(e) => game && e.preventDefault()}
         onDoubleClick={(e) => {
