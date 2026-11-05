@@ -77,6 +77,7 @@ export default function Boat3DView({
   initialForces = false,
   keys = true,
   coach = true,
+  readout = true,
   assist = false,
   handleKeys,
   overlay,
@@ -91,6 +92,8 @@ export default function Boat3DView({
   keys?: boolean;
   /** coaching overlays (telltale reading, kite advice, roll warning). Off in the quiz: they give the answer away. */
   coach?: boolean;
+  /** the telltale / heel reading box in the corner (off when the 2D telltales are shown beside the view) */
+  readout?: boolean;
   /** free practice: offer the Stabilise assist (all controls to the polar's optimum) */
   assist?: boolean;
   /** only these controls get a 3D handle */
@@ -634,7 +637,7 @@ export default function Boat3DView({
       )}
 
       {/* telltale reading */}
-      {coach && <div className="pointer-events-none absolute bottom-2 left-2 max-w-[300px] rounded-md bg-navy-950/75 p-2 text-[11px] backdrop-blur">
+      {coach && readout && <div className="pointer-events-none absolute bottom-2 left-2 max-w-[300px] rounded-md bg-navy-950/75 p-2 text-[11px] backdrop-blur">
         <div className="mb-1 flex items-center gap-2 text-[10px] uppercase tracking-wider text-slate-400">
           {kite ? L('Kite luff', 'Guindant du spi') : L('Jib telltales', 'Penons du foc')}
           <span className="flex items-center gap-1 normal-case tracking-normal">
@@ -669,6 +672,20 @@ export default function Boat3DView({
         {snap.tws < 7 && Math.abs(snap.heel) < 4 && <div className="text-warn">{L('Light air and upright: crew to leeward, a few degrees of heel lets the sails fall into shape', 'Petit temps et bateau à plat : équipage sous le vent, quelques degrés de gîte laissent les voiles prendre leur forme')}</div>}
         {rollWarn && <div className="mt-1 text-alarm">{Math.abs(snap.twa) > 110 ? L('Rolling: sheet the main in a little, vang on, and keep the kite sheeted (no over-ease).', 'Roulis : bordez un peu la GV, hale-bas, et gardez le spi bordé (pas trop choqué).') : L('Rolling: the sails are stalled or flogging, so they no longer damp the roll.', 'Roulis : les voiles sont décrochées ou battent, elles n’amortissent plus le roulis.')}</div>}
       </div>}
+
+      {/* readout off (2D telltales beside the view): only the warnings, when there is one */}
+      {coach && !readout && ((!kite && f.shapes.jibLuffFold > 0.3) || f.shapes.mainLuffFold > 0.3 || (snap.tws < 7 && Math.abs(snap.heel) < 4) || rollWarn) && (
+        <div className="pointer-events-none absolute bottom-2 left-2 max-w-[320px] rounded-md bg-navy-950/75 p-2 text-[11px] backdrop-blur">
+        {!kite && f.shapes.jibLuffFold > 0.3 && (
+          <div className={snap.tws < 8 ? 'text-slate-300' : 'text-warn'}>{snap.tws < 8 ? L('Jib luff: small folds — fine in light air', 'Guindant du foc : petits plis — normal dans le petit temps') : L('Jib luff folds: more halyard (and backstay for the forestay)', 'Plis au guindant du foc : plus de drisse (et de pataras pour l’étai)')}</div>
+        )}
+        {f.shapes.mainLuffFold > 0.3 && (
+          <div className={snap.tws < 8 ? 'text-slate-300' : 'text-warn'}>{snap.tws < 8 ? L('Main luff: small folds — fine in light air', 'Guindant de GV : petits plis — normal dans le petit temps') : L('Main luff folds: cunningham on', 'Plis au guindant de GV : cunningham')}</div>
+        )}
+        {snap.tws < 7 && Math.abs(snap.heel) < 4 && <div className="text-warn">{L('Light air and upright: crew to leeward, a few degrees of heel lets the sails fall into shape', 'Petit temps et bateau à plat : équipage sous le vent, quelques degrés de gîte laissent les voiles prendre leur forme')}</div>}
+        {rollWarn && <div className="mt-1 text-alarm">{Math.abs(snap.twa) > 110 ? L('Rolling: sheet the main in a little, vang on, and keep the kite sheeted (no over-ease).', 'Roulis : bordez un peu la GV, hale-bas, et gardez le spi bordé (pas trop choqué).') : L('Rolling: the sails are stalled or flogging, so they no longer damp the roll.', 'Roulis : les voiles sont décrochées ou battent, elles n’amortissent plus le roulis.')}</div>}
+        </div>
+      )}
 
       {/* force readout */}
       {forces && (

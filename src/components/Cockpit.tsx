@@ -492,7 +492,7 @@ export function Cockpit({
   const view3dEl = (
     <>
               <Suspense fallback={<div className="grid h-[520px] place-items-center text-sm text-slate-400">{L('Loading 3D…', 'Chargement 3D…')}</div>}>
-                <Boat3DView getSim={() => runnerRef.current.sim} snap={snap} assist={freeMode} overlay={overlay3d} height={fit ? fitH - (started ? 46 : 54) : view3dH} />
+                <Boat3DView getSim={() => runnerRef.current.sim} snap={snap} assist={freeMode} overlay={overlay3d} readout={!fit} height={fit ? fitH - (started ? 46 : 54) : view3dH} />
               </Suspense>
     </>
   );
@@ -605,29 +605,30 @@ export function Cockpit({
   );
   const jibStation = (
     <>
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-1">
             <div className="panel-title">{isKite ? L('Gennaker — your station', 'Spi — votre poste') : L('Jib — your station', 'Foc — votre poste')}</div>
             {isKite ? (
               <span className="text-[10px] text-slate-400">{L('Sheet in hand — no winch', 'Écoute à la main — pas de winch')}</span>
             ) : (
-            <div className="flex items-center gap-1">
-              <button onClick={() => sim.setGear(snap.gear === 'high' ? 'low' : 'high')} className="btn-ghost !px-2 !py-1 text-[11px]">
-                <Gauge size={12} /> {snap.gear === 'high' ? L('High gear', 'Grande vitesse') : L('Low gear', 'Petite vitesse')} <Kbd>Q</Kbd>
+            <div className="flex flex-wrap items-center gap-1">
+              <button onClick={() => sim.setGear(snap.gear === 'high' ? 'low' : 'high')} title={L('Winch gear (Q)', 'Vitesse du winch (Q)')} className="btn-ghost !px-2 !py-1 text-[11px]">
+                <Gauge size={12} /> {fit ? (snap.gear === 'high' ? L('High', 'Grande') : L('Low', 'Petite')) : snap.gear === 'high' ? L('High gear', 'Grande vitesse') : L('Low gear', 'Petite vitesse')} {!fit && <Kbd>Q</Kbd>}
               </button>
               <button
                 onClick={() => sim.setGrinder(!snap.grinder)}
                 title={L('A crew member grinds the jib winch while you tail: twice the power, little effort for you, but one less on the rail. They go back out once the sheet is home. From 12–14 kn, have one ready for every tack.', "Un équipier mouline le winch de foc pendant que tu embraques : deux fois plus de puissance, peu d'effort pour toi, mais un de moins au rappel. Il retourne au rappel une fois l'écoute à poste. Dès 12–14 nœuds, prévois-en un à chaque virement.")}
                 className={`btn !px-2 !py-1 text-[11px] ${snap.grinder ? 'bg-cyan-400/30 text-cyan-50' : 'btn-ghost'}`}
               >
-                <Hand size={12} /> {L('Grinder', 'Équipier au winch')} <Kbd>6</Kbd>
+                <Hand size={12} /> {fit ? L('Grinder', 'Équipier') : L('Grinder', 'Équipier au winch')} {!fit && <Kbd>6</Kbd>}
               </button>
               <button
                 onPointerDown={() => sim.setSprint(true)}
                 onPointerUp={() => sim.setSprint(false)}
                 onPointerLeave={() => sim.setSprint(false)}
+                title={L('Sprint grind (hold Shift)', 'Moulinage sprint (maintenir Maj)')}
                 className={`btn !px-2 !py-1 text-[11px] ${snap.sprint ? 'bg-warn text-navy-950' : 'btn-ghost'}`}
               >
-                <Zap size={12} /> {L('Sprint', 'Sprint')} <Kbd>{L('Shift', 'Maj')}</Kbd>
+                <Zap size={12} /> {L('Sprint', 'Sprint')} {!fit && <Kbd>{L('Shift', 'Maj')}</Kbd>}
               </button>
             </div>
             )}
@@ -817,6 +818,10 @@ export function Cockpit({
               {chips}
             </div>
             <div className="panel p-2">{jibStation}</div>
+            <div className="panel p-2">
+              <div className="panel-title">{isKite ? L('Kite luff', 'Guindant du spi') : L('Telltales', 'Penons')}</div>
+              <Telltales f={f} headsail={snap.plan.headsail} collapsed={snap.plan.gennakerCollapsed} curl={snap.kiteCurl} over={snap.kiteOver} luffFlap={snap.kiteLuffFlap} leechFlap={snap.kiteLeechFlap} mainBackwind={snap.kiteMainBackwind} />
+            </div>
             <div className="panel flex min-h-[90px] flex-1 flex-col p-2">
               <div className="panel-title mb-1.5">{L('Crew comms', 'Communication équipage')}</div>
               {commsList}
