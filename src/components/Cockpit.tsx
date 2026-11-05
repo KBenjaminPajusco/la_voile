@@ -164,7 +164,8 @@ export function Cockpit({
   const [phone, setPhone] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const phoneLay = view === '3d' && phone && !wide;
   const slim = fit || phoneLay;
-  const phone3dH = Math.max(240, Math.round(fitH * 0.5));
+  const phone3dH = Math.max(300, fitH - (started ? 34 : 0));
+  const [sheet, setSheet] = useState(true);
   const [ptab, setPtab] = useState<'station' | 'main' | 'crew' | 'inst'>('station');
   const measureFit = useCallback(() => {
     setWide(window.innerWidth >= 1280);
@@ -812,66 +813,75 @@ export function Cockpit({
         </>
       )}
 
-      {/* ---------- phone: the 3D on top, the controls in tabs below, sized to the screen */}
+      {/* ---------- phone: the 3D full screen, the controls floating over it (collapsible) */}
       {phoneLay && (
-        <div ref={fitRef} className="fitc flex flex-col gap-1.5" style={{ height: fitH }}>
+        <div ref={fitRef} className="fitc flex flex-col gap-1" style={{ height: fitH }}>
           {started && (
-            <div className="panel flex items-center justify-between gap-2 px-2 py-1">
+            <div className="panel flex items-center justify-between gap-2 px-2 py-0.5">
               <span className="min-w-0 truncate font-display text-[13px] font-bold uppercase tracking-wider text-white">{def.title}</span>
               <div className="shrink-0">{sessionCtl(true, true)}</div>
             </div>
           )}
-          <div className="relative overflow-hidden rounded-lg">
+          <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg">
             {view3dEl}
-            <div className="pointer-events-none absolute bottom-1.5 right-1.5 flex gap-1 text-[11px]">
-              <span className={`num rounded bg-navy-950/80 px-1.5 py-0.5 ${toneText[perfTone]}`}>{snap.v.toFixed(1)} kn · {Math.round(snap.perf * 100)}%</span>
-              <span className="num rounded bg-navy-950/80 px-1.5 py-0.5 text-white">{L('heel', 'gîte')} {snap.heel.toFixed(0)}°</span>
-              <span className={`num rounded bg-navy-950/80 px-1.5 py-0.5 ${Math.abs(snap.rudder) > 7 ? 'text-alarm' : 'text-white'}`}>{L('rud.', 'saf.')} {snap.rudder.toFixed(0)}°</span>
+            {/* key numbers */}
+            <div className="pointer-events-none absolute left-1.5 top-11 flex gap-1 text-[10.5px]">
+              <span className={`num rounded bg-navy-950/75 px-1.5 py-0.5 ${toneText[perfTone]}`}>{snap.v.toFixed(1)} kn · {Math.round(snap.perf * 100)}%</span>
+              <span className="num rounded bg-navy-950/75 px-1.5 py-0.5 text-white">{L('heel', 'gîte')} {snap.heel.toFixed(0)}°</span>
+              <span className={`num rounded bg-navy-950/75 px-1.5 py-0.5 ${Math.abs(snap.rudder) > 7 ? 'text-alarm' : 'text-white'}`}>{L('rud.', 'saf.')} {snap.rudder.toFixed(0)}°</span>
             </div>
-          </div>
-          <div className="grid grid-cols-4 gap-1">
-            {(
-              [
-                ['station', isKite ? L('Kite', 'Spi') : L('Jib', 'Foc')],
-                ['main', L('Main', 'GV')],
-                ['crew', L('Crew', 'Équipage')],
-                ['inst', L('Instruments', 'Instruments')],
-              ] as const
-            ).map(([id, label]) => (
-              <button key={id} onClick={() => setPtab(id)} className={`rounded-md px-1 py-1.5 text-[12px] font-semibold ${ptab === id ? 'bg-cyan-400 text-navy-950' : 'bg-navy-850 text-slate-300'}`}>
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="panel min-h-0 flex-1 overflow-y-auto p-2">
-            {ptab === 'station' && (
-              <div className="space-y-2">
-                {jibStation}
-                <div>
-                  <div className="panel-title">{isKite ? L('Kite luff', 'Guindant du spi') : L('Telltales', 'Penons')}</div>
-                  <Telltales f={f} headsail={snap.plan.headsail} collapsed={snap.plan.gennakerCollapsed} curl={snap.kiteCurl} over={snap.kiteOver} luffFlap={snap.kiteLuffFlap} leechFlap={snap.kiteLeechFlap} mainBackwind={snap.kiteMainBackwind} />
+            {/* floating controls */}
+            <div className="absolute inset-x-1 bottom-1 rounded-lg border border-cyan-300/15 bg-navy-950/70 p-1 backdrop-blur-sm">
+              <div className="flex gap-1">
+                {(
+                  [
+                    ['station', isKite ? L('Kite', 'Spi') : L('Jib', 'Foc')],
+                    ['main', L('Main', 'GV')],
+                    ['crew', L('Crew', 'Équipage')],
+                    ['inst', L('Instr.', 'Instr.')],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button key={id} onClick={() => (setPtab(id), setSheet(true))} className={`flex-1 rounded-md px-1 py-1 text-[12px] font-semibold ${sheet && ptab === id ? 'bg-cyan-400 text-navy-950' : 'bg-navy-850/80 text-slate-300'}`}>
+                    {label}
+                  </button>
+                ))}
+                <button onClick={() => setSheet((x) => !x)} className="rounded-md bg-navy-850/80 px-2 text-slate-300" aria-label={sheet ? L('Hide the controls', 'Masquer les réglages') : L('Show the controls', 'Afficher les réglages')}>
+                  {sheet ? <ChevronsDown size={15} /> : <ChevronsUp size={15} />}
+                </button>
+              </div>
+              {sheet && (
+                <div className="mt-1 max-h-[32vh] overflow-y-auto">
+                  {ptab === 'station' && (
+                    <div className="space-y-1.5">
+                      {jibStation}
+                      <div>
+                        <div className="panel-title">{isKite ? L('Kite luff', 'Guindant du spi') : L('Telltales', 'Penons')}</div>
+                        <Telltales f={f} headsail={snap.plan.headsail} collapsed={snap.plan.gennakerCollapsed} curl={snap.kiteCurl} over={snap.kiteOver} luffFlap={snap.kiteLuffFlap} leechFlap={snap.kiteLeechFlap} mainBackwind={snap.kiteMainBackwind} />
+                      </div>
+                    </div>
+                  )}
+                  {ptab === 'main' && mainStation}
+                  {ptab === 'crew' && (
+                    <div className="space-y-1.5">
+                      {crewStation}
+                      {talkBlock}
+                    </div>
+                  )}
+                  {ptab === 'inst' && (
+                    <div className="space-y-1.5">
+                      <div className="grid grid-cols-2 gap-1">
+                        {speedCard}
+                        {gauges}
+                      </div>
+                      {windGrid}
+                      {chips}
+                      {energyBlock}
+                      {flowBlock}
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
-            {ptab === 'main' && mainStation}
-            {ptab === 'crew' && (
-              <div className="space-y-2">
-                {crewStation}
-                {talkBlock}
-              </div>
-            )}
-            {ptab === 'inst' && (
-              <div className="space-y-2">
-                <div className="grid grid-cols-2 gap-1">
-                  {speedCard}
-                  {gauges}
-                </div>
-                {windGrid}
-                {chips}
-                {energyBlock}
-                {flowBlock}
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}

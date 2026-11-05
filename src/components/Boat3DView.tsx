@@ -656,17 +656,17 @@ export default function Boat3DView({
 
       {/* crew comms as toasts */}
       {toasts && (
-        <div className="pointer-events-none absolute right-2 top-[84px] z-10 flex w-[min(360px,45%)] flex-col items-end gap-1">
+        <div className={`pointer-events-none absolute z-10 flex flex-col items-end gap-1 ${mini ? 'right-1 top-[68px] w-[58%]' : 'right-2 top-[84px] w-[min(360px,45%)]'}`}>
           {snap.messages
             .filter((m) => snap.t - m.t < 7 && snap.t >= m.t)
-            .slice(-3)
+            .slice(mini ? -2 : -3)
             .map((m) => {
               const age = snap.t - m.t;
               const SPK: Record<string, string> = { helm: L('Helm', 'Barreur'), pit: L('Pit', 'Piano'), tactician: L('Tactician', 'Tacticien'), coach: 'Coach', system: '' };
               return (
                 <div
                   key={`${m.t}-${m.text}`}
-                  className={`max-w-full rounded-md border-l-[3px] bg-navy-950/85 px-2.5 py-1.5 text-[12.5px] leading-snug shadow-lg backdrop-blur ${m.tone === 'alarm' ? 'border-alarm' : m.tone === 'warn' ? 'border-warn' : m.tone === 'good' ? 'border-good' : 'border-cyan-400/70'}`}
+                  className={`max-w-full rounded-md border-l-[3px] bg-navy-950/85 shadow-lg backdrop-blur ${mini ? 'px-1.5 py-0.5 text-[10.5px] leading-tight' : 'px-2.5 py-1.5 text-[12.5px] leading-snug'} ${m.tone === 'alarm' ? 'border-alarm' : m.tone === 'warn' ? 'border-warn' : m.tone === 'good' ? 'border-good' : 'border-cyan-400/70'}`}
                   style={{ opacity: age > 5.5 ? Math.max(0, (7 - age) / 1.5) : 1 }}
                 >
                   {SPK[m.from] && <span className="mr-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{SPK[m.from]}</span>}
@@ -716,7 +716,7 @@ export default function Boat3DView({
 
       {/* readout off (2D telltales beside the view): only the warnings, when there is one */}
       {coach && !readout && ((!kite && f.shapes.jibLuffFold > 0.3) || f.shapes.mainLuffFold > 0.3 || (snap.tws < 7 && Math.abs(snap.heel) < 4) || rollWarn) && (
-        <div className={`pointer-events-none absolute bottom-2 left-2 rounded-md bg-navy-950/75 p-2 text-[11px] backdrop-blur ${mini ? 'max-w-[60%] !bottom-8 text-[10px]' : 'max-w-[320px]'}`}>
+        <div className={`pointer-events-none absolute bottom-2 left-2 rounded-md bg-navy-950/75 p-2 text-[11px] backdrop-blur ${mini ? 'max-w-[40%] !bottom-auto top-[68px] !p-1 text-[10px] leading-tight' : 'max-w-[320px]'}`}>
         {!kite && f.shapes.jibLuffFold > 0.3 && (
           <div className={snap.tws < 8 ? 'text-slate-300' : 'text-warn'}>{snap.tws < 8 ? L('Jib luff: small folds — fine in light air', 'Guindant du foc : petits plis — normal dans le petit temps') : L('Jib luff folds: more halyard (and backstay for the forestay)', 'Plis au guindant du foc : plus de drisse (et de pataras pour l’étai)')}</div>
         )}
