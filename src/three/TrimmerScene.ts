@@ -406,7 +406,7 @@ export class TrimmerScene {
       this.boat.add(t.port.mesh, t.stbd.mesh);
     }
     for (const h of [0.3, 0.55, 0.8]) {
-      const t = { h, r: new Ribbon(0xfacc15, 0.32, 0.03) };
+      const t = { h, r: new Ribbon(0xdc2626, 0.36, 0.036) };
       this.leechTT.push(t);
       this.boat.add(t.r.mesh);
     }
