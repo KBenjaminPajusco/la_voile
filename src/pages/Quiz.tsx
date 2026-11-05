@@ -230,7 +230,7 @@ function QuizRun({ session, setSession, onRecord, onExit }: { session: Session; 
             <button className="btn-ghost" onClick={onExit}>
               {L('Back to quiz menu', 'Retour au menu quiz')}
             </button>
-            <button className="btn-primary" onClick={() => setSession({ ...session, i: 0, answers: [] })}>
+            <button className="btn-primary" onClick={() => (setPicked(null), setTimedOut(false), setSession({ ...session, i: 0, answers: [] }))}>
               <RotateCcw size={15} /> {L('Same set again', 'Refaire la même série')}
             </button>
           </div>
@@ -240,7 +240,13 @@ function QuizRun({ session, setSession, onRecord, onExit }: { session: Session; 
 
   const chosen = q.answers.find((a) => a.id === picked);
   const best = q.answers.find((a) => a.score === 100)!;
-  const next = () => setSession({ ...session, i: session.i + 1 });
+  // reset the answer in the same update as the question change: otherwise the new question renders
+  // once with the previous answer revealed (its answers coloured) before the effect clears it
+  const next = () => {
+    setPicked(null);
+    setTimedOut(false);
+    setSession({ ...session, i: session.i + 1 });
+  };
   const header = (
     <div className="mb-3 flex items-center justify-between gap-2">
       <button className="btn-ghost" onClick={onExit}>
@@ -332,7 +338,7 @@ function QuizRun({ session, setSession, onRecord, onExit }: { session: Session; 
                 const tone = a.score === 100 ? 'border-good/60 bg-good/10' : a.score >= 40 ? 'border-warn/50 bg-warn/5' : 'border-alarm/50 bg-alarm/5';
                 return (
                   <button
-                    key={a.id}
+                    key={`${q.id}-${a.id}`}
                     disabled={reveal}
                     onClick={() => answer(a.id)}
                     className={`w-full rounded-lg border p-3 text-left text-sm transition-colors ${reveal ? tone : 'border-cyan-300/15 bg-navy-850 hover:border-cyan-300/50'} ${isPicked ? 'ring-2 ring-cyan-300' : ''}`}

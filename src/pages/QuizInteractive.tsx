@@ -350,7 +350,7 @@ export function InteractiveQuestion(p: Props) {
             {p.q.answers.map((a) => {
               const tone = a.score === 100 ? 'border-good/60 bg-good/10' : a.score >= 40 ? 'border-warn/50 bg-warn/5' : 'border-alarm/50 bg-alarm/5';
               return (
-                <button key={a.id} disabled={reveal} onClick={() => p.onPick(a.id)} className={`w-full rounded-lg border p-2 text-left text-[13px] transition-colors ${reveal ? tone : 'border-cyan-300/15 bg-navy-850 hover:border-cyan-300/50'} ${p.picked === a.id ? 'ring-2 ring-cyan-300' : ''}`}>
+                <button key={`${p.q.id}-${a.id}`} disabled={reveal} onClick={() => p.onPick(a.id)} className={`w-full rounded-lg border p-2 text-left text-[13px] transition-colors ${reveal ? tone : 'border-cyan-300/15 bg-navy-850 hover:border-cyan-300/50'} ${p.picked === a.id ? 'ring-2 ring-cyan-300' : ''}`}>
                   <div className="flex items-start gap-2">
                     <span className="num mt-0.5 text-xs uppercase text-cyan-300">{a.id}</span>
                     <span className="flex-1 text-slate-100">{a.text}</span>
