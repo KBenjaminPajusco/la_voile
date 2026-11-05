@@ -771,8 +771,8 @@ export const MANEUVERS: ScenarioDef[] = [
     config: () => ({ wind: W(12, 808, [{ kind: 'gust', start: 12, ramp: 1.5, hold: 9, amount: 6 }]), sea: 1, twa: 38, v: 5.3, heel: 17, helmFeathers: false, controls: optimalControls(12, 38) }),
     script: [
       { at: 5, run: (c) => c.prompt(L('Pressure on the water…', "De la pression sur l'eau…"), 'info', 4) },
-      { at: 12, run: (c) => c.mark('gust') },
-      { at: 20.5, run: (c) => c.mark('fade') },
+      { when: (c) => c.sim.windT >= 12, run: (c) => c.mark('gust') },
+      { when: (c) => c.sim.windT >= 20.5, run: (c) => c.mark('fade') },
     ],
     criteria: [
       callCriterion('call', L('Pressure called before impact', "Pression annoncée avant l'impact"), ['pressure'], 'gust', 5, 0.5, 1),
@@ -845,8 +845,8 @@ export const MANEUVERS: ScenarioDef[] = [
     config: () => ({ wind: W(13, 909, [{ kind: 'lull', start: 12, ramp: 2, hold: 9, amount: 5 }]), sea: 1, twa: 38, v: 5.4, heel: 18, controls: { ...optimalControls(13, 38), hike: 1 } }),
     script: [
       { at: 6, run: (c) => c.prompt(L('Soft patch ahead…', 'Zone molle devant…'), 'info', 4) },
-      { at: 12, run: (c) => c.mark('lull') },
-      { at: 21, run: (c) => c.mark('back') },
+      { when: (c) => c.sim.windT >= 12, run: (c) => c.mark('lull') },
+      { when: (c) => c.sim.windT >= 21, run: (c) => c.mark('back') },
     ],
     criteria: [
       callCriterion('call', L('Lull / foot called', 'Molle / mode vitesse annoncé'), ['lull', 'foot'], 'lull', 4, 2, 1),

@@ -35,7 +35,8 @@ C'est un site 100 % statique (aucun serveur) : chaque push sur `main` est constr
   pilotées par les curseurs ; les poignées 3D bougent les curseurs). Les sections de voiles ont un 3ᵉ schéma, « foc + GV = une aile », qui montre si les deux voiles forment bien les deux faces d’un même profil.
 - **Quiz** : 38 situations, chacune montrée en 3D, avec réponses notées, conséquences et « quand la réponse change ».
 - **Mises en situation** : 8 scénarios sous pression (surtoilé, relance après virement, risée soudaine, spi à la limite…).
-  Les risées se voient arriver sur l'eau ~10 s avant de toucher le bateau.
+  Les risées se voient arriver sur l'eau ~10 s avant de toucher le bateau. Elles descendent avec le vent : au près on
+  fonce dessus, sous spi elles arrivent de derrière et nous rattrapent lentement (et restent plus longtemps).
 - **Labo manœuvres** : 9 exercices (virement, empannage, relance, abattée, lofée, pré-départ, modes, risée, molle).
 - **Simulateur** : entraînement libre et 3 match races, vue 3D depuis la place du régleur :
   - penons sur les deux faces du foc (vus par des fenêtres transparentes), penons de chute, guindant du spi qui roule

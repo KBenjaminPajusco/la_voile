@@ -207,6 +207,12 @@ export class Simulator {
   private autoClock = 0;
   private windAhead: { t: number; tws: number; twd: number }[] = [];
   private windAheadAt = -1;
+  /** the wind field's own clock: puffs drift downwind at ~0.85 x the wind, so the boat meets them sooner
+   *  sailing into them (upwind) and much later running away from them (under the kite): they come from
+   *  behind and catch up. Normalised so an upwind boat at target speed keeps the scripted timing. */
+  windT = 0;
+  windRate = 1;
+  private vmgUpCache = { tws: -1, vmg: 0 };
   private autoHoistSince: number | null = null;
   private autoDouseSince: number | null = null;
   heading: number;
@@ -345,6 +351,10 @@ export class Simulator {
     if (g === this.gear) return;
     this.gear = g;
     this.actions.push({ t: this.t, kind: 'gear', label: L(`Winch ${g} gear`, `Winch en ${g === 'low' ? 'petite' : 'grande'} vitesse`), tag: `Winch ${g} gear` });
+  }
+  /** seconds (real time, at the current closing rate) before a scripted wind event reaches the boat */
+  eventEta(e: WindEvent): number {
+    return (e.start - this.windT) / Math.max(0.15, this.windRate);
   }
   /** call a crew member to the jib winch (they grind, you tail) or send them back to the rail */
   setGrinder(on: boolean) {
@@ -521,10 +531,20 @@ export class Simulator {
   // ------------------------------------------------------------------ main step
   step(dt: number) {
     this.t += dt;
-    const ws = this.wind.step(this.t, dt);
+    {
+      const twsRef = Math.max(3, this.twsSmooth);
+      if (Math.abs(this.vmgUpCache.tws - twsRef) > 0.25) this.vmgUpCache = { tws: twsRef, vmg: bestVmgAngle(twsRef, true).vmg };
+      const U = 0.85 * twsRef; // kn, the speed the puffs drift at
+      const toward = this.v * Math.cos(this.twa * DEG); // kn of boat speed INTO the wind (negative running)
+      this.windRate = clamp((1 + toward / U) / (1 + this.vmgUpCache.vmg / U), 0.15, 1.6);
+    }
+    const dw = dt * this.windRate;
+    this.windT += dw;
+    const ws = this.wind.step(this.windT, dw);
     if (this.t - this.windAheadAt >= 0.5 - 1e-6) {
       this.windAheadAt = this.t;
-      this.windAhead = this.wind.forecast(this.t, 15, dt, 0.5);
+      const r = this.windRate;
+      this.windAhead = this.wind.forecast(this.windT, 15 * r, dw, 0.5 * r).map((w) => ({ ...w, t: this.t + (w.t - this.windT) / r }));
     }
     this.tws = ws.tws;
     this.twd = ws.twd;
@@ -961,10 +981,12 @@ export class Simulator {
       if (mid.flow === 'stall') this.say('coach', L('Jib leeward telltales stalling — over-trimmed?', 'Penons sous le vent du foc qui décrochent — sur-bordé ?'), 'warn', 'jibstall', 10);
       if (f.shapes.backwind > 0.45) this.say('helm', L('Main is backwinding — the jib leech is closing the slot.', 'La GV est déventée — la chute du foc ferme la fente.'), 'warn', 'backwind', 10);
     }
-    const up = this.wind.upcoming(this.t, 7);
-    if (up && up.kind === 'gust' && up.start - this.t < 6) this.say('tactician', L(`Pressure on the water, ${Math.round(up.start - this.t)} seconds.`, `Pression sur l'eau, ${Math.round(up.start - this.t)} secondes.`), 'info', `gust-${up.start}`, 30);
-    if (up && up.kind === 'lull' && up.start - this.t < 6) this.say('tactician', L(`Soft patch ahead, ${Math.round(up.start - this.t)} seconds.`, `Zone molle devant, ${Math.round(up.start - this.t)} secondes.`), 'info', `lull-${up.start}`, 30);
-    if (up && up.kind === 'shift' && up.start - this.t < 5)
+    const up = this.wind.upcoming(this.windT, 7 * this.windRate);
+    const eta = up ? this.eventEta(up) : 99;
+    const behind = Math.abs(this.twa) > 100;
+    if (up && up.kind === 'gust' && eta < 6) this.say('tactician', behind ? L(`Pressure coming from behind, ${Math.round(eta)} seconds.`, `Pression qui arrive derrière, ${Math.round(eta)} secondes.`) : L(`Pressure on the water, ${Math.round(eta)} seconds.`, `Pression sur l'eau, ${Math.round(eta)} secondes.`), 'info', `gust-${up.start}`, 30);
+    if (up && up.kind === 'lull' && eta < 6) this.say('tactician', behind ? L(`Soft patch coming from behind, ${Math.round(eta)} seconds.`, `Zone molle qui arrive derrière, ${Math.round(eta)} secondes.`) : L(`Soft patch ahead, ${Math.round(eta)} seconds.`, `Zone molle devant, ${Math.round(eta)} secondes.`), 'info', `lull-${up.start}`, 30);
+    if (up && up.kind === 'shift' && eta < 5)
       this.say('tactician', up.label ?? (up.amount > 0 ? L('Shift coming.', 'Bascule qui arrive.') : L('Shift coming.', 'Bascule qui arrive.')), 'info', `shift-${up.start}`, 30);
   }
 
@@ -1039,7 +1061,7 @@ export class Simulator {
       messages: this.messages,
       winchState: this.winchState,
       gust: this.gust,
-      upcoming: this.wind.upcoming(this.t, 8),
+      upcoming: this.wind.upcoming(this.windT, 8 * this.windRate),
       windAhead: this.windAhead,
       x: this.x,
       y: this.y,

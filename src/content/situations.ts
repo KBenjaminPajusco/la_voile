@@ -63,7 +63,7 @@ export const SITUATIONS: ScenarioDef[] = [
     }),
     script: [
       { at: 0.1, run: (c) => (c.mark('start'), c.prompt(L('Tactician: "Big puff on the water upwind — 19 knots, here in about 12 seconds. Get ready!"', 'Tacticien : « Grosse risée sur l\'eau au vent — 19 nœuds, ici dans environ 12 secondes. Prépare-toi ! »'), 'warn', 5)) },
-      { at: 12, run: (c) => (c.mark('puff'), c.prompt(L('Helm: "Here it is — I am loaded up, help me!"', 'Barreur : « La voilà — je suis chargé, aidez-moi ! »'), 'alarm', 4)) },
+      { when: (c) => c.sim.windT >= 12, run: (c) => (c.mark('puff'), c.prompt(L('Helm: "Here it is — I am loaded up, help me!"', 'Barreur : « La voilà — je suis chargé, aidez-moi ! »'), 'alarm', 4)) },
       { at: 20, run: (c) => c.prompt(L('Tactician: "Hold this lane, we need to keep height on the opponent."', 'Tacticien : « Tiens cette ligne, on doit garder du cap sur l\'adversaire. »'), 'info', 5) },
     ],
     criteria: [
@@ -603,9 +603,9 @@ export const SITUATIONS: ScenarioDef[] = [
     }),
     script: [
       { at: 0.1, run: (c) => c.mark('start') },
-      { at: 6.5, run: (c) => c.prompt(L('Big pressure on the water — 5 seconds!', "Grosse pression sur l'eau — 5 secondes !"), 'warn', 4) },
-      { at: 12, run: (c) => c.mark('gust') },
-      { at: 25.6, run: (c) => c.mark('gustEnd') },
+      { when: (c) => c.sim.windT >= 12 - 5 * c.sim.windRate, run: (c) => c.prompt(L('Big pressure on the water — 5 seconds!', "Grosse pression sur l'eau — 5 secondes !"), 'warn', 4) },
+      { when: (c) => c.sim.windT >= 12, run: (c) => c.mark('gust') },
+      { when: (c) => c.sim.windT >= 25.6, run: (c) => c.mark('gustEnd') },
     ],
     criteria: [
       callCriterion('call', L('Called the pressure to the helm', 'Pression annoncée au barreur'), ['pressure'], 'gust', 6, 1, 1),
@@ -824,7 +824,7 @@ export const SITUATIONS: ScenarioDef[] = [
     ),
     focusControls: ['jibSheet', 'vang', 'mainSheet', 'hike'],
     config: () => ({
-      wind: wind(13, { seed: 51, gustiness: 0.3, events: [{ kind: 'gust', start: 12, ramp: 1.5, hold: 9, amount: 7 }] }),
+      wind: wind(13, { seed: 51, gustiness: 0.3, events: [{ kind: 'gust', start: 7, ramp: 1.5, hold: 9, amount: 7 }] }),
       sea: 1,
       twa: 110,
       fixedTwa: 110,
@@ -835,8 +835,8 @@ export const SITUATIONS: ScenarioDef[] = [
     }),
     script: [
       { at: 0.1, run: (c) => c.mark('start') },
-      { at: 7, run: (c) => c.prompt(L('Pressure coming — 5 seconds!', 'Pression qui arrive — 5 secondes !'), 'warn', 4) },
-      { at: 12, run: (c) => c.mark('gust') },
+      { when: (c) => c.sim.windT >= 7 - 5 * c.sim.windRate, run: (c) => c.prompt(L('Pressure coming from behind — 5 seconds!', 'Pression qui arrive derrière — 5 secondes !'), 'warn', 4) },
+      { when: (c) => c.sim.windT >= 7, run: (c) => c.mark('gust') },
     ],
     criteria: [
       callCriterion('call', L('Called the puff', 'Risée annoncée'), ['pressure'], 'gust', 6, 1, 0.8),
@@ -937,9 +937,9 @@ export const SITUATIONS: ScenarioDef[] = [
     }),
     script: [
       { at: 0.1, run: (c) => c.mark('start') },
-      { at: 5, run: (c) => c.prompt(L('Soft patch ahead — 5 seconds.', 'Molle devant — 5 secondes.'), 'info', 4) },
-      { at: 12, run: (c) => c.mark('lull') },
-      { at: 29.5, run: (c) => c.mark('lullEnd') },
+      { when: (c) => c.sim.windT >= 12 - 5 * c.sim.windRate, run: (c) => c.prompt(L('Soft patch ahead — 5 seconds.', 'Molle devant — 5 secondes.'), 'info', 4) },
+      { when: (c) => c.sim.windT >= 12, run: (c) => c.mark('lull') },
+      { when: (c) => c.sim.windT >= 29.5, run: (c) => c.mark('lullEnd') },
     ],
     criteria: [
       callCriterion('call', L('Told the helm (lull / foot)', 'Barreur prévenu (molle / vitesse)'), ['lull', 'foot'], 'lull', 5, 3, 1),
