@@ -7,7 +7,8 @@ import type { QuizQuestion } from '../content/types';
 import { QUIZ_SCENES } from '../content/quizScenes';
 import { sceneOptimal, staticSource } from '../three/staticSnapshot';
 import { advise, explainChange, merit, solve, type ChangeReport } from '../sim/advisor';
-import type { Controls } from '../content/types';
+import type { ControlKey, Controls } from '../content/types';
+import { ControlSlider } from '../components/ControlSlider';
 import { L } from '../i18n';
 import { Bar, Chip, Panel, scoreTone, toneText } from '../ui/kit';
 
@@ -171,6 +172,45 @@ export function InteractiveQuestion(p: Props) {
     p.onScore(s);
   };
 
+  // the same controls as the 3D handles, as sliders (the handles are not obvious to everyone yet)
+  const [, setTick] = useState(0);
+  const kiteUp = lab?.headsail === 'gennaker';
+  const SLIDERS: { k: ControlKey; label: string; l: string; r: string; off?: boolean }[] = [
+    { k: 'jibSheet', label: kiteUp ? L('Kite sheet', 'Écoute de spi') : L('Jib sheet', 'Écoute de foc'), l: L('ease', 'choquer'), r: L('trim', 'border') },
+    { k: 'jibLead', label: L('Jib lead', 'Chariot de foc'), l: L('fwd', 'avant'), r: L('aft', 'arrière'), off: kiteUp },
+    { k: 'jibHalyard', label: L('Jib halyard', 'Drisse de foc'), l: L('soft', 'mou'), r: L('tight', 'tendu'), off: kiteUp },
+    { k: 'mainSheet', label: L('Mainsheet', 'Écoute de GV'), l: L('ease', 'choquer'), r: L('trim', 'border') },
+    { k: 'traveller', label: L('Traveller', 'Chariot de GV'), l: L('leeward', 'sous le vent'), r: L('windward', 'au vent') },
+    { k: 'backstay', label: L('Backstay', 'Pataras'), l: 'off', r: 'max' },
+    { k: 'vang', label: L('Vang', 'Hale-bas'), l: 'off', r: 'max' },
+    { k: 'outhaul', label: L('Outhaul', 'Bordure'), l: L('deep', 'creux'), r: L('flat', 'plat') },
+    { k: 'cunningham', label: 'Cunningham', l: 'off', r: 'max' },
+    { k: 'hike', label: L('Crew weight', 'Poids équipage'), l: L('leeward', 'sous le vent'), r: L('full hike', 'plein rappel') },
+  ];
+  const sliders =
+    lab && validated === null ? (
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-5">
+        {SLIDERS.filter((x) => !x.off).map((x) => (
+          <ControlSlider
+            key={x.k}
+            compact
+            label={x.label}
+            leftLabel={x.l}
+            rightLabel={x.r}
+            actual={lab.controls[x.k]}
+            target={lab.controls[x.k]}
+            step={0.02}
+            onChange={(v) => {
+              lab.setTarget(x.k, v);
+              setSnap(lab.snapshot());
+              setVersion(lab.version);
+              setTick((t) => t + 1);
+            }}
+          />
+        ))}
+      </div>
+    ) : null;
+
   const view3d =
     lab && snap ? (
       <Suspense fallback={<div className="grid h-[460px] place-items-center text-sm text-slate-400">{L('Loading 3D…', 'Chargement 3D…')}</div>}>
@@ -206,14 +246,15 @@ export function InteractiveQuestion(p: Props) {
       <div className="grid gap-3 lg:grid-cols-[1fr_340px]">
         <div className="space-y-2">
           {view3d}
-          <p className="text-[11px] text-slate-500">{L('Grab a glowing handle and drag it (car, winch, mainsheet, traveller, backstay…). Wheel to zoom out, top bar to change camera.', 'Attrape une poignée lumineuse et glisse-la (chariot, winch, écoute de GV, chariot de GV, pataras…). Molette pour dézoomer, barre du haut pour changer de caméra.')}</p>
+          {sliders}
+          <p className="text-[11px] text-slate-500">{L('Use the sliders, or grab a glowing handle in 3D and drag it (car, winch, mainsheet, traveller, backstay…). Wheel to zoom out, top bar to change camera.', 'Utilise les curseurs, ou attrape une poignée lumineuse en 3D et glisse-la (chariot, winch, écoute de GV, chariot de GV, pataras…). Molette pour dézoomer, barre du haut pour changer de caméra.')}</p>
         </div>
         <div className="space-y-3">
           <Panel title={L('The situation', 'La situation')}>{situation}</Panel>
           <Panel title={L('Your move', 'À toi')}>
             {validated === null ? (
               <>
-                <p className="text-sm text-white">{L('Fix it in 3D. Change what you would change on the water — each move is explained.', 'Corrige-le en 3D. Change ce que tu changerais sur l\'eau — chaque réglage est expliqué.')}</p>
+                <p className="text-sm text-white">{L('Fix it with the sliders or the 3D handles. Change what you would change on the water — each move is explained.', 'Corrige-le avec les curseurs ou les poignées 3D. Change ce que tu changerais sur l\'eau — chaque réglage est expliqué.')}</p>
                 <div className="mt-3">
                   <div className="mb-1 flex justify-between text-[11px] text-slate-400">
                     <span>{L('Gap to the best trim recovered', 'Écart au meilleur réglage rattrapé')}</span>
