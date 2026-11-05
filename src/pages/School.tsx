@@ -175,7 +175,7 @@ function LessonView({ lesson, nav }: { lesson: Lesson; nav: Nav }) {
 
       {lesson.lab && (
         <div className="mt-4">
-          <LessonLab lesson={lesson} />
+          <LessonLab key={lesson.id} lesson={lesson} />
         </div>
       )}
 

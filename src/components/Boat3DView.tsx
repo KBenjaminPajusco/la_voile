@@ -80,6 +80,7 @@ export default function Boat3DView({
   assist = false,
   handleKeys,
   overlay,
+  compact = false,
 }: {
   getSim: () => SnapSource;
   snap: Snapshot;
@@ -96,6 +97,8 @@ export default function Boat3DView({
   handleKeys?: ControlKey[];
   /** extra UI drawn over the view (easy-mode coach card) - stays visible in full screen */
   overlay?: React.ReactNode;
+  /** half-width view (two side by side): icon-only toggles */
+  compact?: boolean;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -444,23 +447,23 @@ export default function Boat3DView({
       <div className="pointer-events-none absolute inset-x-2 top-2 flex flex-wrap items-start justify-between gap-2">
         <div className="pointer-events-auto flex flex-wrap gap-1 rounded-md bg-navy-950/70 p-1 backdrop-blur">
           {VIEWS.map((v) => (
-            <button key={v.id} onClick={() => setView(v.id)} className={`rounded px-2 py-1 text-xs ${view === v.id ? 'bg-cyan-400/25 text-cyan-100' : 'text-slate-300 hover:text-white'}`}>
+            <button key={v.id} onClick={() => setView(v.id)} className={`rounded ${compact ? 'px-1.5 text-[11px]' : 'px-2 text-xs'} py-1 ${view === v.id ? 'bg-cyan-400/25 text-cyan-100' : 'text-slate-300 hover:text-white'}`}>
               {v.label}
             </button>
           ))}
           <span className="mx-1 w-px bg-cyan-300/20" />
           <button onClick={() => setForces((x) => !x)} title={L('Force arrows (F)', 'Flèches de forces (F)')} className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${forces ? 'bg-amber-400/25 text-amber-100' : 'text-slate-300 hover:text-white'}`}>
-            <MoveDiagonal size={12} /> {L('Forces', 'Forces')}
+            <MoveDiagonal size={12} /> {!compact && L('Forces', 'Forces')}
           </button>
           <button onClick={() => setXray((x) => !x)} title={L('See-through jib (B)', 'Foc transparent (B)')} className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${xray ? 'bg-cyan-400/25 text-cyan-100' : 'text-slate-300 hover:text-white'}`}>
-            <ScanEye size={12} /> {L('X-ray jib', 'Foc transparent')}
+            <ScanEye size={12} /> {!compact && L('X-ray jib', 'Foc transparent')}
           </button>
           <button onClick={() => setInertia((x) => !x)} title={L('Head inertia: the eye lags the boat so you feel acceleration and heel', 'Inertie de la tête : le regard suit le bateau avec retard pour ressentir accélération et gîte')} className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${inertia ? 'bg-cyan-400/25 text-cyan-100' : 'text-slate-300 hover:text-white'}`}>
-            <Waves size={12} /> {L('Inertia', 'Inertie')}
+            <Waves size={12} /> {!compact && L('Inertia', 'Inertie')}
           </button>
           {getSim().setTarget && (
             <button onClick={() => setHandles((x) => !x)} title={L('Grab the trim controls in 3D: jib car, clew, winch, halyard, forestay, mainsheet, traveller, vang, outhaul, cunningham, kite sheet', 'Saisissez les réglages en 3D : chariot de foc, point d’écoute, winch, drisse, étai, écoute de GV, chariot de GV, hale-bas, bordure, cunningham, écoute de spi')} className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${handles ? 'bg-cyan-400/25 text-cyan-100' : 'text-slate-300 hover:text-white'}`}>
-              <Hand size={12} /> {L('Handles', 'Poignées')}
+              <Hand size={12} /> {!compact && L('Handles', 'Poignées')}
             </button>
           )}
           {assist && getSim().setAutoKey && (
@@ -491,7 +494,7 @@ export default function Boat3DView({
             </button>
           )}
           <button onClick={() => setHudOn((x) => !x)} title={L('Instrument HUD (always on in full screen)', 'HUD instruments (toujours affiché en plein écran)')} className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${hudOn || full ? 'bg-cyan-400/25 text-cyan-100' : 'text-slate-300 hover:text-white'}`}>
-            <Gauge size={12} /> HUD
+            <Gauge size={12} /> {!compact && 'HUD'}
           </button>
         </div>
         <div className="pointer-events-auto flex gap-1 rounded-md bg-navy-950/70 p-1 backdrop-blur">

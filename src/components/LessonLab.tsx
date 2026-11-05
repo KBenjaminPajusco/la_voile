@@ -15,7 +15,7 @@ import type { CamView } from '../three/TrimmerScene';
 const Boat3DView = lazy(() => import('./Boat3DView'));
 
 /** which 3D camera shows a lesson best */
-function labView(lesson: Lesson): { view: CamView; forces: boolean } {
+function labView(lesson: Lesson): { view: CamView; forces: boolean; second?: CamView } {
   const byId: Record<string, { view: CamView; forces: boolean }> = {
     'jib-telltales': { view: 'trimmer', forces: false },
     'jib-over-under-trim': { view: 'trimmer', forces: false },
@@ -29,11 +29,11 @@ function labView(lesson: Lesson): { view: CamView; forces: boolean } {
     'upwind-downwind-modes': { view: 'trimmer', forces: true },
     'kite-pressure-heel': { view: 'leeward', forces: true },
   };
+  // jib and main lessons: two views side by side - the trimmer's seat, and the one that shows the
+  // sail's shape (jib from the leeward deck, main from dead astern)
+  if (lesson.module === 'headsail') return { view: 'trimmer', forces: false, second: 'leeward' };
+  if (lesson.module === 'mainsail') return { view: 'main', forces: false, second: 'astern' };
   if (byId[lesson.id]) return byId[lesson.id];
-  // jib lessons: from the leeward side deck - lead, sheet, clew, leech and twist in front of you;
-  // main lessons: up the leech from the aft quarter
-  if (lesson.module === 'headsail') return { view: 'leeward', forces: false };
-  if (lesson.module === 'mainsail') return { view: 'main', forces: false };
   return { view: 'chase', forces: true };
 }
 
@@ -189,7 +189,15 @@ export function LessonLab({ lesson }: { lesson: Lesson }) {
         <div className="space-y-4">
           <div>
             <Suspense fallback={<div className="grid h-[380px] place-items-center text-sm text-slate-400">{L('Loading 3D…', 'Chargement 3D…')}</div>}>
-              <Boat3DView getSim={() => src3d} snap={snap3d} height={380} initialView={cam.view} initialForces={cam.forces} keys={false} handleKeys={lab.controls} />
+              {cam.second ? (
+                // the trimmer's own seat on the left, the view that shows the sail's shape on the right
+                <div className="grid grid-cols-2 gap-1">
+                  <Boat3DView getSim={() => src3d} snap={snap3d} height={380} initialView={cam.view} initialForces={cam.forces} keys={false} handleKeys={lab.controls} compact />
+                  <Boat3DView getSim={() => src3d} snap={snap3d} height={380} initialView={cam.second} initialForces={false} keys={false} handleKeys={lab.controls} coach={false} compact />
+                </div>
+              ) : (
+                <Boat3DView getSim={() => src3d} snap={snap3d} height={380} initialView={cam.view} initialForces={cam.forces} keys={false} handleKeys={lab.controls} />
+              )}
             </Suspense>
             <p className="mt-1 text-[10px] text-slate-500">
               {L('Live: the sliders shape the 3D sails. Drag a glowing handle in 3D to move the same control; switch cameras at the top.', 'En direct : les curseurs façonnent les voiles en 3D. Glisse une poignée lumineuse en 3D pour bouger le même réglage ; change de caméra en haut.')}
