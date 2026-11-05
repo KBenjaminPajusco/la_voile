@@ -114,6 +114,15 @@ function LessonView({ lesson, nav }: { lesson: Lesson; nav: Nav }) {
 
       <div className="grid gap-4 xl:grid-cols-[1.15fr_1fr]">
         <div className="space-y-4">
+          <div className="flex items-start gap-2 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-[13px] leading-snug text-amber-100">
+            <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warn" />
+            <span>
+              {L(
+                'These theory texts were written by an AI and have not been proofread yet: there are surely quite a few mistakes in them. Read them critically and trust the water when it disagrees.',
+                "Ces textes théoriques ont été rédigés par une IA et ne sont pas encore relus : il y a sûrement pas mal de bêtises dedans. Lis-les avec un œil critique, et fais confiance à l'eau quand elle n'est pas d'accord.",
+              )}
+            </span>
+          </div>
           {lesson.sections.map((s) => (
             <Panel key={s.heading} title={s.heading}>
               {s.body.split('\n\n').map((p, i) => (
