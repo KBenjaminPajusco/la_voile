@@ -211,10 +211,11 @@ export function InteractiveQuestion(p: Props) {
       </div>
     ) : null;
 
+  const phoneW = typeof window !== 'undefined' && window.innerWidth < 640;
   const view3d =
     lab && snap ? (
       <Suspense fallback={<div className="grid h-[460px] place-items-center text-sm text-slate-400">{L('Loading 3D…', 'Chargement 3D…')}</div>}>
-        <Boat3DView getSim={() => lab} snap={snap} height={460} initialView={spec!.view ?? 'trimmer'} initialForces={!!spec!.forces} keys={false} coach={false} />
+        <Boat3DView getSim={() => lab} snap={snap} height={phoneW ? 300 : 460} initialView={spec!.view ?? 'trimmer'} initialForces={!!spec!.forces} keys={false} coach={false} mini={phoneW} />
       </Suspense>
     ) : null;
 

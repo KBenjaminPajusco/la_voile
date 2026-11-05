@@ -48,3 +48,6 @@ input[type='range'].tm-range::-moz-range-thumb { height: 16px; width: 16px; bord
 .fitc .space-y-2 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.35rem !important; }
 .fitc .mt-3 { margin-top: 0.4rem !important; }
 .fitc .mt-2 { margin-top: 0.3rem !important; }
+
+/* grid items may shrink below their content width (otherwise long rows push the page wider than a phone) */
+.grid > * { min-width: 0; }

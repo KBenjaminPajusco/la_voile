@@ -147,10 +147,13 @@ export function LessonLab({ lesson }: { lesson: Lesson }) {
   );
   const snap3d = labSnapshot(res, c, tws, twa, headsail, 0);
   const cam = labView(lesson);
+  // phone: one 3D view only (two side by side would be 180 px wide each)
+  const phoneW = typeof window !== 'undefined' && window.innerWidth < 640;
   return (
     <Panel title={<span className="flex items-center gap-2"><FlaskConical size={13} /> {L('Interactive lab — same physics as the simulator', 'Labo interactif — même physique que le simulateur')}</span>}>
+      {/* phone: 3D first, then the sliders right under it, then the diagrams; desktop: sliders on the left */}
       <div className="grid gap-4 xl:grid-cols-[260px_1fr]">
-        <div className="space-y-3">
+        <div className="order-2 space-y-3 xl:order-none xl:col-start-1 xl:row-span-2 xl:row-start-1">
           {lab.controls.map((k) => (
             <div key={k}>
               <div className="flex justify-between text-xs text-slate-300">
@@ -187,14 +190,14 @@ export function LessonLab({ lesson }: { lesson: Lesson }) {
             <RotateCcw size={14} /> {L('Reset lab', 'Réinitialiser le labo')}
           </button>
         </div>
-        <div className="space-y-4">
+        <div className="order-1 xl:order-none xl:col-start-2 xl:row-start-1">
           <div>
             <Suspense fallback={<div className="grid h-[380px] place-items-center text-sm text-slate-400">{L('Loading 3D…', 'Chargement 3D…')}</div>}>
               {cam.second ? (
                 // the trimmer's own seat on the left, the view that shows the sail's shape on the right
-                <div className="grid grid-cols-2 gap-1">
-                  <Boat3DView getSim={() => src3d} snap={snap3d} height={380} initialView={cam.view} initialForces={cam.forces} keys={false} handleKeys={lab.controls} compact />
-                  <Boat3DView getSim={() => src3d} snap={snap3d} height={380} initialView={cam.second} initialForces={false} keys={false} handleKeys={lab.controls} coach={false} compact />
+                <div className="grid gap-1 sm:grid-cols-2">
+                  <Boat3DView getSim={() => src3d} snap={snap3d} height={phoneW ? 300 : 380} initialView={cam.view} initialForces={cam.forces} keys={false} handleKeys={lab.controls} compact mini={phoneW} readout={!phoneW} />
+                  {!phoneW && <Boat3DView getSim={() => src3d} snap={snap3d} height={380} initialView={cam.second} initialForces={false} keys={false} handleKeys={lab.controls} coach={false} compact />}
                 </div>
               ) : (
                 <Boat3DView getSim={() => src3d} snap={snap3d} height={380} initialView={cam.view} initialForces={cam.forces} keys={false} handleKeys={lab.controls} />
@@ -204,6 +207,8 @@ export function LessonLab({ lesson }: { lesson: Lesson }) {
               {L('Live: the sliders shape the 3D sails. Drag a glowing handle in 3D to move the same control; switch cameras at the top.', 'En direct : les curseurs façonnent les voiles en 3D. Glisse une poignée lumineuse en 3D pour bouger le même réglage ; change de caméra en haut.')}
             </p>
           </div>
+        </div>
+        <div className="order-3 space-y-4 xl:order-none xl:col-start-2 xl:row-start-2">
           <LessonDiagram kind={lesson.diagram} res={res} c={c} tws={tws} twa={twa} module={lesson.module} />
           <div>
             <div className="panel-title mb-2">{L('Compare configurations', 'Comparer les configurations')}</div>

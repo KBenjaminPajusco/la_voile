@@ -160,8 +160,15 @@ export function Cockpit({
   const fitRef = useRef<HTMLDivElement>(null);
   const [fitH, setFitH] = useState(720);
   const fit = view === '3d' && wide;
+  // phone: the 3D on top, the controls in tabs below, sized to the screen
+  const [phone, setPhone] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  const phoneLay = view === '3d' && phone && !wide;
+  const slim = fit || phoneLay;
+  const phone3dH = Math.max(240, Math.round(fitH * 0.5));
+  const [ptab, setPtab] = useState<'station' | 'main' | 'crew' | 'inst'>('station');
   const measureFit = useCallback(() => {
     setWide(window.innerWidth >= 1280);
+    setPhone(window.innerWidth < 768);
     const el = fitRef.current;
     if (!el) return;
     const top = el.getBoundingClientRect().top + window.scrollY;
@@ -173,7 +180,7 @@ export function Cockpit({
   }, [measureFit]);
   useEffect(() => {
     measureFit();
-  }, [fit, started, showKeys, measureFit]);
+  }, [fit, phoneLay, started, showKeys, measureFit]);
   // ---- keyboard
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -254,7 +261,7 @@ export function Cockpit({
         }}
       />
     ) : null;
-  const sessionCtl = (compact: boolean) => (
+  const sessionCtl = (compact: boolean, tiny = false) => (
         <div className={`flex flex-wrap items-center ${compact ? 'gap-2' : 'gap-4'}`}>
           {hud.map((h) => (
             <div key={h.label} className="text-right">
@@ -280,15 +287,15 @@ export function Cockpit({
               )}
             </div>
           )}
-          <div className="flex items-center gap-1">
+          {!tiny && <div className="flex items-center gap-1">
             {[0.5, 1, 2].map((s) => (
               <button key={s} onClick={() => setTimeScale(s)} className={`num rounded px-1.5 py-0.5 text-[11px] ${timeScale === s ? 'bg-cyan-400 text-navy-950' : 'text-slate-400 hover:text-white'}`}>
                 ×{s}
               </button>
             ))}
-          </div>
+          </div>}
           <button className={`${paused ? 'btn-primary' : 'btn-ghost'} ${compact ? '!px-2 !py-1 text-xs' : ''}`} onClick={() => (setPaused((p) => !p), setStarted(true))}>
-            {paused ? <Play size={compact ? 13 : 16} /> : <Pause size={compact ? 13 : 16} />} {paused ? (started ? L('Resume', 'Reprendre') : L('Start', 'Démarrer')) : L('Pause', 'Pause')}
+            {paused ? <Play size={compact ? 13 : 16} /> : <Pause size={compact ? 13 : 16} />} {!tiny && (paused ? (started ? L('Resume', 'Reprendre') : L('Start', 'Démarrer')) : L('Pause', 'Pause'))}
           </button>
           <button className={`btn-ghost ${compact ? '!px-2 !py-1' : ''}`} onClick={restart} title={L('Restart', 'Recommencer')}>
             <RotateCcw size={16} />
@@ -302,17 +309,17 @@ export function Cockpit({
             }}
             title={L('End & debrief', 'Terminer et débriefer')}
           >
-            <Square size={16} /> {L('End', 'Fin')}
+            <Square size={tiny ? 13 : 16} /> {!tiny && L('End', 'Fin')}
           </button>
-          <button className={`btn-ghost ${compact ? '!px-2 !py-1' : ''}`} onClick={() => setShowKeys((v) => !v)} title={L('Keyboard', 'Clavier')}>
+          {!tiny && <button className={`btn-ghost ${compact ? '!px-2 !py-1' : ''}`} onClick={() => setShowKeys((v) => !v)} title={L('Keyboard', 'Clavier')}>
             <Keyboard size={16} />
-          </button>
+          </button>}
           <button className={`btn-ghost ${compact ? '!px-2 !py-1 text-xs' : ''}`} onClick={onExit}>
             {L('Exit', 'Quitter')}
           </button>
         </div>
   );
-  const overlay3d = fit ? (
+  const overlay3d = slim ? (
     <div className="space-y-1">
       {prompts.slice(-2).map((p, i) => (
         <div key={i} className={`rounded-lg border bg-navy-950/85 px-3 py-1.5 text-sm font-semibold shadow-xl backdrop-blur ${p.tone === 'alarm' ? 'border-alarm/60 text-alarm' : p.tone === 'warn' ? 'border-warn/60 text-warn' : p.tone === 'good' ? 'border-good/60 text-good' : 'border-cyan-300/30 text-cyan-200'}`}>
@@ -337,7 +344,7 @@ export function Cockpit({
                 <span className="text-[10px] uppercase tracking-[0.16em] text-slate-400">{L('Boat speed', 'Vitesse bateau')}</span>
                 <span className={`num text-xs ${toneText[perfTone]}`}>{Math.round(snap.perf * 100)}% {L('target', 'cible')}</span>
               </div>
-              <div className={`num font-semibold text-white ${fit ? 'text-3xl leading-tight' : 'text-4xl'}`}>
+              <div className={`num font-semibold text-white ${slim ? 'text-3xl leading-tight' : 'text-4xl'}`}>
                 {snap.v.toFixed(2)}
                 <span className="ml-1 text-sm text-slate-400">kn</span>
               </div>
@@ -356,10 +363,10 @@ export function Cockpit({
   const gauges = (
     <>
             <div className="flex justify-center">
-              <ArcGauge value={snap.heel} min={-10} max={40} label={L('Heel', 'Gîte')} unit="°" decimals={0} size={fit ? 92 : 110} zones={[{ from: 14, to: 24, color: '#34d399' }, { from: 24, to: 28, color: '#f59e0b' }, { from: 28, to: 40, color: '#ef4444' }]} />
+              <ArcGauge value={snap.heel} min={-10} max={40} label={L('Heel', 'Gîte')} unit="°" decimals={0} size={slim ? 92 : 110} zones={[{ from: 14, to: 24, color: '#34d399' }, { from: 24, to: 28, color: '#f59e0b' }, { from: 28, to: 40, color: '#ef4444' }]} />
             </div>
             <div className="flex justify-center">
-              <ArcGauge value={snap.rudder} min={-6} max={18} label={L('Rudder', 'Safran')} unit="°" decimals={1} size={fit ? 92 : 110} zones={[{ from: 1, to: 5, color: '#34d399' }, { from: 5, to: 9, color: '#f59e0b' }, { from: 9, to: 18, color: '#ef4444' }]} />
+              <ArcGauge value={snap.rudder} min={-6} max={18} label={L('Rudder', 'Safran')} unit="°" decimals={1} size={slim ? 92 : 110} zones={[{ from: 1, to: 5, color: '#34d399' }, { from: 5, to: 9, color: '#f59e0b' }, { from: 9, to: 18, color: '#ef4444' }]} />
             </div>
     </>
   );
@@ -425,7 +432,7 @@ export function Cockpit({
   );
   const flowBlock = (
     <>
-          <div className={`grid gap-2 text-[11px] ${fit ? 'grid-cols-4 gap-1 text-[10px]' : 'grid-cols-2'}`}>
+          <div className={`grid gap-2 text-[11px] ${slim ? 'grid-cols-4 gap-1 text-[10px]' : 'grid-cols-2'}`}>
             <div className="rounded border border-cyan-300/10 p-2">
               <div className="text-slate-400">{isKite ? L('Kite flow', 'Écoulement spi') : L('Jib flow', 'Écoulement foc')}</div>
               <div className="num text-white">{Math.round((isKite ? (f.gennaker?.efficiency ?? 0) : f.jib.efficiency) * 100)}%</div>
@@ -492,7 +499,7 @@ export function Cockpit({
   const view3dEl = (
     <>
               <Suspense fallback={<div className="grid h-[520px] place-items-center text-sm text-slate-400">{L('Loading 3D…', 'Chargement 3D…')}</div>}>
-                <Boat3DView getSim={() => runnerRef.current.sim} snap={snap} assist={freeMode} overlay={overlay3d} readout={!fit} toasts={fit} height={fit ? fitH - (started ? 46 : 54) : view3dH} />
+                <Boat3DView getSim={() => runnerRef.current.sim} snap={snap} assist={freeMode} overlay={overlay3d} readout={!slim} toasts={slim} compact={phoneLay} mini={phoneLay} height={fit ? fitH - (started ? 46 : 54) : phoneLay ? phone3dH : view3dH} />
               </Suspense>
     </>
   );
@@ -612,14 +619,14 @@ export function Cockpit({
             ) : (
             <div className="flex flex-wrap items-center gap-1">
               <button onClick={() => sim.setGear(snap.gear === 'high' ? 'low' : 'high')} title={L('Winch gear (Q)', 'Vitesse du winch (Q)')} className="btn-ghost !px-2 !py-1 text-[11px]">
-                <Gauge size={12} /> {fit ? (snap.gear === 'high' ? L('High', 'Grande') : L('Low', 'Petite')) : snap.gear === 'high' ? L('High gear', 'Grande vitesse') : L('Low gear', 'Petite vitesse')} {!fit && <Kbd>Q</Kbd>}
+                <Gauge size={12} /> {slim ? (snap.gear === 'high' ? L('High', 'Grande') : L('Low', 'Petite')) : snap.gear === 'high' ? L('High gear', 'Grande vitesse') : L('Low gear', 'Petite vitesse')} {!slim && <Kbd>Q</Kbd>}
               </button>
               <button
                 onClick={() => sim.setGrinder(!snap.grinder)}
                 title={L('A crew member grinds the jib winch while you tail: twice the power, little effort for you, but one less on the rail. They go back out once the sheet is home. From 12–14 kn, have one ready for every tack.', "Un équipier mouline le winch de foc pendant que tu embraques : deux fois plus de puissance, peu d'effort pour toi, mais un de moins au rappel. Il retourne au rappel une fois l'écoute à poste. Dès 12–14 nœuds, prévois-en un à chaque virement.")}
                 className={`btn !px-2 !py-1 text-[11px] ${snap.grinder ? 'bg-cyan-400/30 text-cyan-50' : 'btn-ghost'}`}
               >
-                <Hand size={12} /> {fit ? L('Grinder', 'Équipier') : L('Grinder', 'Équipier au winch')} {!fit && <Kbd>6</Kbd>}
+                <Hand size={12} /> {slim ? L('Grinder', 'Équipier') : L('Grinder', 'Équipier au winch')} {!slim && <Kbd>6</Kbd>}
               </button>
               <button
                 onPointerDown={() => sim.setSprint(true)}
@@ -628,13 +635,13 @@ export function Cockpit({
                 title={L('Sprint grind (hold Shift)', 'Moulinage sprint (maintenir Maj)')}
                 className={`btn !px-2 !py-1 text-[11px] ${snap.sprint ? 'bg-warn text-navy-950' : 'btn-ghost'}`}
               >
-                <Zap size={12} /> {L('Sprint', 'Sprint')} {!fit && <Kbd>{L('Shift', 'Maj')}</Kbd>}
+                <Zap size={12} /> {L('Sprint', 'Sprint')} {!slim && <Kbd>{L('Shift', 'Maj')}</Kbd>}
               </button>
             </div>
             )}
           </div>
           <div className="space-y-2">
-            <ControlSlider compact={fit} label={isKite ? L('Kite sheet', 'Écoute de spi') : L('Jib sheet', 'Écoute de foc')} actual={snap.controls.jibSheet} target={snap.targets.jibSheet} onChange={set('jibSheet')} keys={['W', 'S']} leftLabel={L('ease', 'choquer')} rightLabel={isKite ? L('trim (by hand)', 'border (à la main)') : L('trim (grind)', 'border (mouliner)')} highlight={focus.has('jibSheet')} step={0.02} note={snap.winchState === 'stalled' ? L('Winch stalled — get a grinder on it (6), low gear, or unload the sheet.', "Winch bloqué — un équipier au winch (6), petite vitesse, ou soulager l'écoute.") : undefined} />
+            <ControlSlider compact={slim} label={isKite ? L('Kite sheet', 'Écoute de spi') : L('Jib sheet', 'Écoute de foc')} actual={snap.controls.jibSheet} target={snap.targets.jibSheet} onChange={set('jibSheet')} keys={['W', 'S']} leftLabel={L('ease', 'choquer')} rightLabel={isKite ? L('trim (by hand)', 'border (à la main)') : L('trim (grind)', 'border (mouliner)')} highlight={focus.has('jibSheet')} step={0.02} note={snap.winchState === 'stalled' ? L('Winch stalled — get a grinder on it (6), low gear, or unload the sheet.', "Winch bloqué — un équipier au winch (6), petite vitesse, ou soulager l'écoute.") : undefined} />
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => sim.prepareSheet()} className={`btn !py-1.5 text-xs ${sim.prepared ? 'bg-good/20 text-good border border-good/40' : 'btn-ghost'}`}>
                 <Anchor size={12} /> {sim.prepared ? L('Sheet ready', 'Écoute prête') : L('Prep lazy sheet', "Préparer l'écoute")} <Kbd>A</Kbd>
@@ -644,8 +651,8 @@ export function Cockpit({
               </button>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <ControlSlider compact={fit} label={L('Jib lead', 'Chariot de foc')} actual={snap.controls.jibLead} target={snap.targets.jibLead} onChange={set('jibLead')} keys={['[', ']']} leftLabel={L('fwd', 'avant')} rightLabel={L('aft', 'arrière')} highlight={focus.has('jibLead')} disabled={isKite} />
-              <ControlSlider compact={fit} label={L('Jib halyard', 'Drisse de foc')} actual={snap.controls.jibHalyard} target={snap.targets.jibHalyard} onChange={set('jibHalyard')} keys={['N', 'M']} leftLabel={L('soft', 'mou')} rightLabel={L('tight', 'tendu')} highlight={focus.has('jibHalyard')} disabled={isKite} />
+              <ControlSlider compact={slim} label={L('Jib lead', 'Chariot de foc')} actual={snap.controls.jibLead} target={snap.targets.jibLead} onChange={set('jibLead')} keys={['[', ']']} leftLabel={L('fwd', 'avant')} rightLabel={L('aft', 'arrière')} highlight={focus.has('jibLead')} disabled={isKite} />
+              <ControlSlider compact={slim} label={L('Jib halyard', 'Drisse de foc')} actual={snap.controls.jibHalyard} target={snap.targets.jibHalyard} onChange={set('jibHalyard')} keys={['N', 'M']} leftLabel={L('soft', 'mou')} rightLabel={L('tight', 'tendu')} highlight={focus.has('jibHalyard')} disabled={isKite} />
             </div>
           </div>
     </>
@@ -654,19 +661,19 @@ export function Cockpit({
     <>
           <div className="panel-title mb-2">{L('Mainsail', 'Grand-voile')}</div>
           <div className="grid grid-cols-2 gap-2">
-            <ControlSlider compact={fit} label={L('Mainsheet', 'Écoute de GV')} actual={snap.controls.mainSheet} target={snap.targets.mainSheet} onChange={set('mainSheet')} keys={['E', 'D']} leftLabel={L('ease', 'choquer')} rightLabel={L('trim', 'border')} highlight={focus.has('mainSheet')} step={0.02} />
-            <ControlSlider compact={fit} label={L('Traveller', 'Chariot de GV')} actual={snap.controls.traveller} target={snap.targets.traveller} onChange={set('traveller')} keys={['T', 'G']} leftLabel={L('leeward', 'sous le vent')} rightLabel={L('windward', 'au vent')} highlight={focus.has('traveller')} />
-            <ControlSlider compact={fit} label={L('Backstay', 'Pataras')} actual={snap.controls.backstay} target={snap.targets.backstay} onChange={set('backstay')} keys={['Y', 'H']} leftLabel="off" rightLabel="max" highlight={focus.has('backstay')} />
-            <ControlSlider compact={fit} label={L('Vang', 'Hale-bas')} actual={snap.controls.vang} target={snap.targets.vang} onChange={set('vang')} keys={['U', 'J']} leftLabel="off" rightLabel="max" highlight={focus.has('vang')} />
-            <ControlSlider compact={fit} label={L('Outhaul', 'Bordure')} actual={snap.controls.outhaul} target={snap.targets.outhaul} onChange={set('outhaul')} keys={['I', 'K']} leftLabel={L('deep', 'creux')} rightLabel={L('flat', 'plat')} highlight={focus.has('outhaul')} />
-            <ControlSlider compact={fit} label={L('Cunningham', 'Cunningham')} actual={snap.controls.cunningham} target={snap.targets.cunningham} onChange={set('cunningham')} keys={['O', 'L']} leftLabel="off" rightLabel="max" highlight={focus.has('cunningham')} />
+            <ControlSlider compact={slim} label={L('Mainsheet', 'Écoute de GV')} actual={snap.controls.mainSheet} target={snap.targets.mainSheet} onChange={set('mainSheet')} keys={['E', 'D']} leftLabel={L('ease', 'choquer')} rightLabel={L('trim', 'border')} highlight={focus.has('mainSheet')} step={0.02} />
+            <ControlSlider compact={slim} label={L('Traveller', 'Chariot de GV')} actual={snap.controls.traveller} target={snap.targets.traveller} onChange={set('traveller')} keys={['T', 'G']} leftLabel={L('leeward', 'sous le vent')} rightLabel={L('windward', 'au vent')} highlight={focus.has('traveller')} />
+            <ControlSlider compact={slim} label={L('Backstay', 'Pataras')} actual={snap.controls.backstay} target={snap.targets.backstay} onChange={set('backstay')} keys={['Y', 'H']} leftLabel="off" rightLabel="max" highlight={focus.has('backstay')} />
+            <ControlSlider compact={slim} label={L('Vang', 'Hale-bas')} actual={snap.controls.vang} target={snap.targets.vang} onChange={set('vang')} keys={['U', 'J']} leftLabel="off" rightLabel="max" highlight={focus.has('vang')} />
+            <ControlSlider compact={slim} label={L('Outhaul', 'Bordure')} actual={snap.controls.outhaul} target={snap.targets.outhaul} onChange={set('outhaul')} keys={['I', 'K']} leftLabel={L('deep', 'creux')} rightLabel={L('flat', 'plat')} highlight={focus.has('outhaul')} />
+            <ControlSlider compact={slim} label={L('Cunningham', 'Cunningham')} actual={snap.controls.cunningham} target={snap.targets.cunningham} onChange={set('cunningham')} keys={['O', 'L']} leftLabel="off" rightLabel="max" highlight={focus.has('cunningham')} />
           </div>
     </>
   );
   const crewStation = (
     <>
           <div className="panel-title mb-2">{L('Crew', 'Équipage')}</div>
-          <ControlSlider compact={fit} label={L('Crew weight', 'Poids équipage')} actual={snap.controls.hike} target={snap.targets.hike} onChange={set('hike')} keys={['Z', 'X']} leftLabel={L('leeward', 'sous le vent')} rightLabel={L('full hike', 'plein rappel')} highlight={focus.has('hike')} />
+          <ControlSlider compact={slim} label={L('Crew weight', 'Poids équipage')} actual={snap.controls.hike} target={snap.targets.hike} onChange={set('hike')} keys={['Z', 'X']} leftLabel={L('leeward', 'sous le vent')} rightLabel={L('full hike', 'plein rappel')} highlight={focus.has('hike')} />
           <div className="mt-2">
             <div className="mb-1 text-[11px] uppercase tracking-wider text-slate-400">
               {L('Crew weight fore/aft', 'Poids équipage av/ar')} <Kbd>C</Kbd>
@@ -678,7 +685,7 @@ export function Cockpit({
                 </button>
               ))}
             </div>
-            {!fit && <p className="mt-2 text-[11px] leading-relaxed text-slate-400">{L('Forward in light air (lifts the transom, less wetted area). Aft when fast downwind (lifts the bow, helps planing). Hike for righting moment; come in when the heel drops below ~10°.', "Avant dans le petit temps (soulage le tableau, moins de surface mouillée). Arrière au portant rapide (soulage l'étrave, aide au planing). Rappel pour le couple de redressement ; rentrer quand la gîte passe sous ~10°.")}</p>}
+            {!slim && <p className="mt-2 text-[11px] leading-relaxed text-slate-400">{L('Forward in light air (lifts the transom, less wetted area). Aft when fast downwind (lifts the bow, helps planing). Hike for righting moment; come in when the heel drops below ~10°.', "Avant dans le petit temps (soulage le tableau, moins de surface mouillée). Arrière au portant rapide (soulage l'étrave, aide au planing). Rappel pour le couple de redressement ; rentrer quand la gîte passe sous ~10°.")}</p>}
           </div>
           <div className="mt-3 rounded-lg border border-cyan-300/10 p-2 text-[11px] text-slate-400">
             <div className="mb-1 font-semibold uppercase tracking-wider text-slate-300">{L('Speed calls', 'Annonces vitesse')}</div>
@@ -693,7 +700,7 @@ export function Cockpit({
   return (
     <div className={fit ? 'space-y-2' : 'space-y-3'}>
       {/* ---------- top bar (in the 3D cockpit, once started, it moves into the strip above the view) */}
-      {!(fit && started) && (
+      {!(slim && started) && (
       <div className="panel flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
         <div className="min-w-0">
           <div className="font-display text-lg font-bold uppercase tracking-wider text-white">{def.title}</div>
@@ -750,7 +757,7 @@ export function Cockpit({
       )}
 
       {view !== '3d' && coachCard}
-      {!fit && (
+      {!fit && !phoneLay && (
         <>
       {/* ---------- prompts */}
       {prompts.length > 0 && (
@@ -762,7 +769,7 @@ export function Cockpit({
           ))}
         </div>
       )}
-      <div className="grid gap-3 xl:grid-cols-[260px_1fr_300px] lg:grid-cols-[240px_1fr]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-3 xl:grid-cols-[260px_1fr_300px] lg:grid-cols-[240px_1fr]">
         {/* ---------- instruments */}
         <div className="panel space-y-3 p-3">
           <div className="grid grid-cols-2 gap-2">
@@ -803,6 +810,70 @@ export function Cockpit({
         <div className="panel p-3">{crewStation}</div>
       </div>
         </>
+      )}
+
+      {/* ---------- phone: the 3D on top, the controls in tabs below, sized to the screen */}
+      {phoneLay && (
+        <div ref={fitRef} className="fitc flex flex-col gap-1.5" style={{ height: fitH }}>
+          {started && (
+            <div className="panel flex items-center justify-between gap-2 px-2 py-1">
+              <span className="min-w-0 truncate font-display text-[13px] font-bold uppercase tracking-wider text-white">{def.title}</span>
+              <div className="shrink-0">{sessionCtl(true, true)}</div>
+            </div>
+          )}
+          <div className="relative overflow-hidden rounded-lg">
+            {view3dEl}
+            <div className="pointer-events-none absolute bottom-1.5 right-1.5 flex gap-1 text-[11px]">
+              <span className={`num rounded bg-navy-950/80 px-1.5 py-0.5 ${toneText[perfTone]}`}>{snap.v.toFixed(1)} kn · {Math.round(snap.perf * 100)}%</span>
+              <span className="num rounded bg-navy-950/80 px-1.5 py-0.5 text-white">{L('heel', 'gîte')} {snap.heel.toFixed(0)}°</span>
+              <span className={`num rounded bg-navy-950/80 px-1.5 py-0.5 ${Math.abs(snap.rudder) > 7 ? 'text-alarm' : 'text-white'}`}>{L('rud.', 'saf.')} {snap.rudder.toFixed(0)}°</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-4 gap-1">
+            {(
+              [
+                ['station', isKite ? L('Kite', 'Spi') : L('Jib', 'Foc')],
+                ['main', L('Main', 'GV')],
+                ['crew', L('Crew', 'Équipage')],
+                ['inst', L('Instruments', 'Instruments')],
+              ] as const
+            ).map(([id, label]) => (
+              <button key={id} onClick={() => setPtab(id)} className={`rounded-md px-1 py-1.5 text-[12px] font-semibold ${ptab === id ? 'bg-cyan-400 text-navy-950' : 'bg-navy-850 text-slate-300'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="panel min-h-0 flex-1 overflow-y-auto p-2">
+            {ptab === 'station' && (
+              <div className="space-y-2">
+                {jibStation}
+                <div>
+                  <div className="panel-title">{isKite ? L('Kite luff', 'Guindant du spi') : L('Telltales', 'Penons')}</div>
+                  <Telltales f={f} headsail={snap.plan.headsail} collapsed={snap.plan.gennakerCollapsed} curl={snap.kiteCurl} over={snap.kiteOver} luffFlap={snap.kiteLuffFlap} leechFlap={snap.kiteLeechFlap} mainBackwind={snap.kiteMainBackwind} />
+                </div>
+              </div>
+            )}
+            {ptab === 'main' && mainStation}
+            {ptab === 'crew' && (
+              <div className="space-y-2">
+                {crewStation}
+                {talkBlock}
+              </div>
+            )}
+            {ptab === 'inst' && (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-1">
+                  {speedCard}
+                  {gauges}
+                </div>
+                {windGrid}
+                {chips}
+                {energyBlock}
+                {flowBlock}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* ---------- 3D cockpit that fits the screen: telemetry, comms and sliders split on both sides of the view */}
