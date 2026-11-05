@@ -492,7 +492,7 @@ export function Cockpit({
   const view3dEl = (
     <>
               <Suspense fallback={<div className="grid h-[520px] place-items-center text-sm text-slate-400">{L('Loading 3D…', 'Chargement 3D…')}</div>}>
-                <Boat3DView getSim={() => runnerRef.current.sim} snap={snap} assist={freeMode} overlay={overlay3d} readout={!fit} height={fit ? fitH - (started ? 46 : 54) : view3dH} />
+                <Boat3DView getSim={() => runnerRef.current.sim} snap={snap} assist={freeMode} overlay={overlay3d} readout={!fit} toasts={fit} height={fit ? fitH - (started ? 46 : 54) : view3dH} />
               </Suspense>
     </>
   );
@@ -821,10 +821,6 @@ export function Cockpit({
             <div className="panel p-2">
               <div className="panel-title">{isKite ? L('Kite luff', 'Guindant du spi') : L('Telltales', 'Penons')}</div>
               <Telltales f={f} headsail={snap.plan.headsail} collapsed={snap.plan.gennakerCollapsed} curl={snap.kiteCurl} over={snap.kiteOver} luffFlap={snap.kiteLuffFlap} leechFlap={snap.kiteLeechFlap} mainBackwind={snap.kiteMainBackwind} />
-            </div>
-            <div className="panel flex min-h-[90px] flex-1 flex-col p-2">
-              <div className="panel-title mb-1.5">{L('Crew comms', 'Communication équipage')}</div>
-              {commsList}
             </div>
           </div>
           <div className="panel flex min-h-0 flex-col p-1.5">

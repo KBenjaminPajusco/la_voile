@@ -78,6 +78,7 @@ export default function Boat3DView({
   keys = true,
   coach = true,
   readout = true,
+  toasts = false,
   assist = false,
   handleKeys,
   overlay,
@@ -94,6 +95,8 @@ export default function Boat3DView({
   coach?: boolean;
   /** the telltale / heel reading box in the corner (off when the 2D telltales are shown beside the view) */
   readout?: boolean;
+  /** crew messages as toasts over the view (top right), fading out after a few seconds */
+  toasts?: boolean;
   /** free practice: offer the Stabilise assist (all controls to the polar's optimum) */
   assist?: boolean;
   /** only these controls get a 3D handle */
@@ -633,6 +636,29 @@ export default function Boat3DView({
               <span className="text-slate-100">{m.text}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* crew comms as toasts */}
+      {toasts && (
+        <div className="pointer-events-none absolute right-2 top-[84px] z-10 flex w-[min(360px,45%)] flex-col items-end gap-1">
+          {snap.messages
+            .filter((m) => snap.t - m.t < 7 && snap.t >= m.t)
+            .slice(-3)
+            .map((m) => {
+              const age = snap.t - m.t;
+              const SPK: Record<string, string> = { helm: L('Helm', 'Barreur'), pit: L('Pit', 'Piano'), tactician: L('Tactician', 'Tacticien'), coach: 'Coach', system: '' };
+              return (
+                <div
+                  key={`${m.t}-${m.text}`}
+                  className={`max-w-full rounded-md border-l-[3px] bg-navy-950/85 px-2.5 py-1.5 text-[12.5px] leading-snug shadow-lg backdrop-blur ${m.tone === 'alarm' ? 'border-alarm' : m.tone === 'warn' ? 'border-warn' : m.tone === 'good' ? 'border-good' : 'border-cyan-400/70'}`}
+                  style={{ opacity: age > 5.5 ? Math.max(0, (7 - age) / 1.5) : 1 }}
+                >
+                  {SPK[m.from] && <span className="mr-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{SPK[m.from]}</span>}
+                  <span className="text-slate-100">{m.text}</span>
+                </div>
+              );
+            })}
         </div>
       )}
 
