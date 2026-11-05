@@ -1837,8 +1837,8 @@ const BEHAVIOR: Lesson[] = [
       tws: 12,
       twa: 42,
       presets: [
-        { name: 'Pointing mode', description: `Higher angle, firm leeches.`, controls: { jibSheet: 0.9, mainSheet: 0.88, traveller: 0.6, backstay: 0.5 }, twa: 39 },
-        { name: 'Footing mode', description: `Lower angle, eased sheets.`, controls: { jibSheet: 0.78, mainSheet: 0.75, traveller: 0.45, backstay: 0.35 }, twa: 45 },
+        { name: 'Pointing mode', description: `Higher angle, firm leeches.`, controls: { jibSheet: 0.9, mainSheet: 0.83, traveller: 0.74, backstay: 0.55 }, twa: 39 },
+        { name: 'Footing mode', description: `Lower angle, eased sheets.`, controls: { jibSheet: 0.82, mainSheet: 0.8, traveller: 0.6, backstay: 0.45 }, twa: 45 },
         { name: 'Downwind deep', description: `Sails eased, deep angle.`, controls: { jibSheet: 0.15, mainSheet: 0.15, traveller: 0.3, backstay: 0 }, twa: 150 },
       ],
     },

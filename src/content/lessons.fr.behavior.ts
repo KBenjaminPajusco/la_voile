@@ -497,8 +497,8 @@ export const LESSONS_FR_BEHAVIOR: Lesson[] = [
       tws: 12,
       twa: 42,
       presets: [
-        { name: `Mode cap`, description: `Angle plus haut, chutes fermes.`, controls: { jibSheet: 0.9, mainSheet: 0.88, traveller: 0.6, backstay: 0.5 }, twa: 39 },
-        { name: `Mode vitesse`, description: `Angle plus bas, écoutes choquées.`, controls: { jibSheet: 0.78, mainSheet: 0.75, traveller: 0.45, backstay: 0.35 }, twa: 45 },
+        { name: `Mode cap`, description: `Angle plus haut, chutes fermes.`, controls: { jibSheet: 0.9, mainSheet: 0.83, traveller: 0.74, backstay: 0.55 }, twa: 39 },
+        { name: `Mode vitesse`, description: `Angle plus bas, écoutes choquées.`, controls: { jibSheet: 0.82, mainSheet: 0.8, traveller: 0.6, backstay: 0.45 }, twa: 45 },
         { name: `Portant profond`, description: `Voiles choquées, angle profond.`, controls: { jibSheet: 0.15, mainSheet: 0.15, traveller: 0.3, backstay: 0 }, twa: 150 },
       ],
     },

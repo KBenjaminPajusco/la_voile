@@ -5,6 +5,7 @@ import { J80_PROFILE } from '../sim/boatProfile';
 import { DEFAULT_PLAN, steadyState, type SteadyResult } from '../sim/physics';
 import { optimalControls, targetSpeed } from '../sim/polar';
 import { mainOnControls } from '../sim/advisor';
+import { tunePreset } from '../content/labTuning';
 import { CONTROL_RATES } from '../sim/engine';
 import { LessonDiagram } from './diagrams';
 import { Panel } from '../ui/kit';
@@ -111,7 +112,7 @@ export function LessonLab({ lesson }: { lesson: Lesson }) {
   const jibFocus = headsail === 'jib' && lab.controls.some((k) => k.startsWith('jib')) && !lab.controls.includes('traveller');
   const baseFor = (tws: number, twa: number) => (jibFocus ? mainOnControls(tws, twa, plan) : optimalControls(tws, twa, headsail));
   const base = baseFor(lab.tws, lab.twa);
-  const initial = useMemo(() => ({ ...base, ...(lab.presets[0]?.controls ?? {}) }), [lesson.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const initial = useMemo(() => (lab.presets[0] ? tunePreset(lesson.id, 0, base, lab.presets[0].controls) : base), [lesson.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [c, setC] = useState<Controls>(initial);
   const [tws, setTws] = useState(lab.tws);
   const [twa, setTwa] = useState(lab.twa);
@@ -120,7 +121,7 @@ export function LessonLab({ lesson }: { lesson: Lesson }) {
   const presetResults = useMemo(
     () =>
       lab.presets.map((p) => {
-        const pc = { ...baseFor(p.tws ?? lab.tws, p.twa ?? lab.twa), ...p.controls };
+        const pc = tunePreset(lesson.id, lab.presets.indexOf(p), baseFor(p.tws ?? lab.tws, p.twa ?? lab.twa), p.controls);
         return { p, r: steadyState(J80_PROFILE, pc, { tws: p.tws ?? lab.tws, twa: p.twa ?? lab.twa, sea: 0 }, plan) };
       }),
     [lesson.id], // eslint-disable-line react-hooks/exhaustive-deps
@@ -237,7 +238,7 @@ export function LessonLab({ lesson }: { lesson: Lesson }) {
                         <button
                           className="btn-ghost !px-2 !py-1 text-[11px]"
                           onClick={() => {
-                            setC({ ...baseFor(p.tws ?? lab.tws, p.twa ?? lab.twa), ...p.controls });
+                            setC(tunePreset(lesson.id, lab.presets.indexOf(p), baseFor(p.tws ?? lab.tws, p.twa ?? lab.twa), p.controls));
                             setTws(p.tws ?? lab.tws);
                             setTwa(p.twa ?? lab.twa);
                           }}
