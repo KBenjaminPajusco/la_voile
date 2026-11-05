@@ -225,10 +225,13 @@ export class KiteMold {
       const hh = b / bands;
       // the curl is strongest mid-luff and grows with the ease; it flickers with the gusts of pressure
       // ...and fades out smoothly towards the head and the tack, where the chord is tiny and the cloth is held
-      const ends = THREE.MathUtils.smoothstep(hh, 0.1, 0.3) * THREE.MathUtils.smoothstep(1 - hh, 0.12, 0.32);
-      const amount = k.curl * ends * Math.pow(Math.sin(Math.PI * Math.min(0.98, Math.max(0.02, hh))), 0.8) * (0.9 + 0.1 * Math.sin(k.time * 2.7 + hh * 5));
-      if (amount < 0.02) return (cache[b] = null), null;
-      const tc = Math.min(0.42, 0.05 + 0.24 * Math.min(1.2, amount));
+      // The break line stays nearly parallel to the luff (set by the ease, not by the height); towards
+      // the head and the tack only the ROLL dies away, so the lip unrolls gently instead of ending in a wedge
+      const ends = THREE.MathUtils.smoothstep(hh, 0.04, 0.3) * THREE.MathUtils.smoothstep(1 - hh, 0.05, 0.34);
+      const flicker = 0.9 + 0.1 * Math.sin(k.time * 2.7 + hh * 5);
+      const amount = k.curl * ends * Math.pow(Math.sin(Math.PI * Math.min(0.98, Math.max(0.02, hh))), 0.5) * flicker;
+      if (amount < 0.01) return (cache[b] = null), null;
+      const tc = Math.min(0.42, (0.05 + 0.24 * Math.min(1.2, k.curl)) * (0.55 + 0.45 * Math.sqrt(ends)));
       this.sample(hh, tc, A);
       this.sample(hh, Math.max(0, tc - 0.03), B);
       U.subVectors(A, B).normalize(); // along the chord, pointing aft

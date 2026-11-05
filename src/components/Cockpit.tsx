@@ -148,6 +148,13 @@ export function Cockpit({
 
   const sim = runnerRef.current.sim;
 
+  // the 3D view grows with the window: it is what you trim from
+  const [view3dH, setView3dH] = useState(() => (typeof window === 'undefined' ? 520 : Math.round(Math.min(900, Math.max(520, window.innerHeight * 0.68)))));
+  useEffect(() => {
+    const on = () => setView3dH(Math.round(Math.min(900, Math.max(520, window.innerHeight * 0.68))));
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
   // ---- keyboard
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -488,7 +495,7 @@ export function Cockpit({
           {view === '3d' && (
             <div className="mb-2">
               <Suspense fallback={<div className="grid h-[520px] place-items-center text-sm text-slate-400">{L('Loading 3D…', 'Chargement 3D…')}</div>}>
-                <Boat3DView getSim={() => runnerRef.current.sim} snap={snap} assist={freeMode} overlay={coachCard} />
+                <Boat3DView getSim={() => runnerRef.current.sim} snap={snap} assist={freeMode} overlay={coachCard} height={view3dH} />
               </Suspense>
               <div className="mt-1 text-[10px] text-slate-500">{L('Drag to look around · drag a glowing handle to trim (car, clew, winch, halyard, forestay foot, mainsheet, traveller, vang, outhaul, cunningham, kite clew) · wheel to zoom in/out · double-click to reset · V view · F forces · B see-through jib', "Glisser pour regarder · glisser une poignée lumineuse pour régler (chariot, point d'écoute, winch, drisse, pied d'étai, écoute de GV, chariot de GV, hale-bas, bordure, cunningham, point d'écoute de spi) · molette pour zoomer · double-clic pour recadrer · V vue · F forces · B foc transparent")}</div>
             </div>

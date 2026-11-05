@@ -152,7 +152,8 @@ export default function App() {
           <span className="font-display font-bold tracking-[0.18em]">TRIMMASTER</span>
           <span className="num text-xs text-cyan-200">L{lvl.level}</span>
         </div>
-        <div className="mx-auto max-w-[1500px] px-4 py-5 sm:px-6 lg:py-7">{page}</div>
+        {/* a running session (simulator, situation, maneuver, race) takes the whole width: the 3D is the point */}
+        <div className={`mx-auto px-4 py-5 sm:px-6 lg:py-7 ${['simulator', 'situations', 'maneuvers'].includes(section) && param ? 'max-w-none 2xl:px-8' : 'max-w-[1500px]'}`}>{page}</div>
       </main>
     </div>
   );
