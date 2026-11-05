@@ -597,6 +597,9 @@ export function Cockpit({
         <div className="panel p-3">
           <div className="mb-2 flex items-center justify-between">
             <div className="panel-title">{isKite ? L('Gennaker — your station', 'Spi — votre poste') : L('Jib — your station', 'Foc — votre poste')}</div>
+            {isKite ? (
+              <span className="text-[10px] text-slate-400">{L('Sheet in hand — no winch', 'Écoute à la main — pas de winch')}</span>
+            ) : (
             <div className="flex items-center gap-1">
               <button onClick={() => sim.setGear(snap.gear === 'high' ? 'low' : 'high')} className="btn-ghost !px-2 !py-1 text-[11px]">
                 <Gauge size={12} /> {snap.gear === 'high' ? L('High gear', 'Grande vitesse') : L('Low gear', 'Petite vitesse')} <Kbd>Q</Kbd>
@@ -617,9 +620,10 @@ export function Cockpit({
                 <Zap size={12} /> {L('Sprint', 'Sprint')} <Kbd>{L('Shift', 'Maj')}</Kbd>
               </button>
             </div>
+            )}
           </div>
           <div className="space-y-2">
-            <ControlSlider label={isKite ? L('Kite sheet', 'Écoute de spi') : L('Jib sheet', 'Écoute de foc')} actual={snap.controls.jibSheet} target={snap.targets.jibSheet} onChange={set('jibSheet')} keys={['W', 'S']} leftLabel={L('ease', 'choquer')} rightLabel={L('trim (grind)', 'border (mouliner)')} highlight={focus.has('jibSheet')} step={0.02} note={snap.winchState === 'stalled' ? L('Winch stalled — get a grinder on it (6), low gear, or unload the sheet.', "Winch bloqué — un équipier au winch (6), petite vitesse, ou soulager l'écoute.") : undefined} />
+            <ControlSlider label={isKite ? L('Kite sheet', 'Écoute de spi') : L('Jib sheet', 'Écoute de foc')} actual={snap.controls.jibSheet} target={snap.targets.jibSheet} onChange={set('jibSheet')} keys={['W', 'S']} leftLabel={L('ease', 'choquer')} rightLabel={isKite ? L('trim (by hand)', 'border (à la main)') : L('trim (grind)', 'border (mouliner)')} highlight={focus.has('jibSheet')} step={0.02} note={snap.winchState === 'stalled' ? L('Winch stalled — get a grinder on it (6), low gear, or unload the sheet.', "Winch bloqué — un équipier au winch (6), petite vitesse, ou soulager l'écoute.") : undefined} />
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => sim.prepareSheet()} className={`btn !py-1.5 text-xs ${sim.prepared ? 'bg-good/20 text-good border border-good/40' : 'btn-ghost'}`}>
                 <Anchor size={12} /> {sim.prepared ? L('Sheet ready', 'Écoute prête') : L('Prep lazy sheet', "Préparer l'écoute")} <Kbd>A</Kbd>

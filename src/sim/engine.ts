@@ -847,10 +847,18 @@ export class Simulator {
     const tg = this.targets;
     let energyUse = 0;
     // ---- headsail winch
-    const travel = this.p.jibSheetTravel * (this.plan.headsail === 'gennaker' ? 3 : 1);
+    const travel = this.p.jibSheetTravel;
     const ds = tg.jibSheet - c.jibSheet;
     this.winchState = 'idle';
-    if (ds < -0.002) {
+    if (this.plan.headsail === 'gennaker') {
+      // the J/80 kite sheet is played by hand, no winch: as quick as the mainsheet both ways
+      if (Math.abs(ds) > 0.002) {
+        const rate = (ds > 0 ? 0.35 : 0.9) * dt;
+        c.jibSheet = ds > 0 ? Math.min(tg.jibSheet, c.jibSheet + rate) : Math.max(tg.jibSheet, c.jibSheet - rate);
+        this.winchState = ds > 0 ? 'tailing' : 'easing';
+        if (ds > 0) energyUse += 0.9 * Math.min(1, this.f.jibSheetLoad / 600);
+      }
+    } else if (ds < -0.002) {
       const rate = (1.0 / travel) * dt;
       c.jibSheet = Math.max(tg.jibSheet, c.jibSheet - rate);
       this.winchState = 'easing';
