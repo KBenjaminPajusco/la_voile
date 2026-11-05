@@ -6,6 +6,7 @@ import {
   ChevronsDown,
   ChevronsUp,
   Gauge,
+  Hand,
   Keyboard,
   Megaphone,
   Pause,
@@ -168,6 +169,7 @@ export function Cockpit({
       else if (k === 'a') s.prepareSheet();
       else if (k === 'r') s.releaseSheet();
       else if (k === 'q') s.setGear(s.gear === 'high' ? 'low' : 'high');
+      else if (k === '6') s.setGrinder(!s.grinder);
       else if (k === 'c') s.setCrewFore(s.plan.crewFore === 0 ? 1 : s.plan.crewFore === 1 ? -1 : 0);
       else if (k === 'enter' && freeMode) {
         if (Math.abs(s.twa) < 95) s.commandTack();
@@ -600,6 +602,13 @@ export function Cockpit({
                 <Gauge size={12} /> {snap.gear === 'high' ? L('High gear', 'Grande vitesse') : L('Low gear', 'Petite vitesse')} <Kbd>Q</Kbd>
               </button>
               <button
+                onClick={() => sim.setGrinder(!snap.grinder)}
+                title={L('A crew member grinds the jib winch while you tail: twice the power, little effort for you, but one less on the rail. They go back out once the sheet is home. From 12–14 kn, have one ready for every tack.', "Un équipier mouline le winch de foc pendant que tu embraques : deux fois plus de puissance, peu d'effort pour toi, mais un de moins au rappel. Il retourne au rappel une fois l'écoute à poste. Dès 12–14 nœuds, prévois-en un à chaque virement.")}
+                className={`btn !px-2 !py-1 text-[11px] ${snap.grinder ? 'bg-cyan-400/30 text-cyan-50' : 'btn-ghost'}`}
+              >
+                <Hand size={12} /> {L('Grinder', 'Équipier au winch')} <Kbd>6</Kbd>
+              </button>
+              <button
                 onPointerDown={() => sim.setSprint(true)}
                 onPointerUp={() => sim.setSprint(false)}
                 onPointerLeave={() => sim.setSprint(false)}
@@ -610,7 +619,7 @@ export function Cockpit({
             </div>
           </div>
           <div className="space-y-2">
-            <ControlSlider label={isKite ? L('Kite sheet', 'Écoute de spi') : L('Jib sheet', 'Écoute de foc')} actual={snap.controls.jibSheet} target={snap.targets.jibSheet} onChange={set('jibSheet')} keys={['W', 'S']} leftLabel={L('ease', 'choquer')} rightLabel={L('trim (grind)', 'border (mouliner)')} highlight={focus.has('jibSheet')} step={0.02} note={snap.winchState === 'stalled' ? L('Winch stalled — low gear, sprint, or unload the sheet.', "Winch bloqué — petite vitesse, sprint, ou soulager l'écoute.") : undefined} />
+            <ControlSlider label={isKite ? L('Kite sheet', 'Écoute de spi') : L('Jib sheet', 'Écoute de foc')} actual={snap.controls.jibSheet} target={snap.targets.jibSheet} onChange={set('jibSheet')} keys={['W', 'S']} leftLabel={L('ease', 'choquer')} rightLabel={L('trim (grind)', 'border (mouliner)')} highlight={focus.has('jibSheet')} step={0.02} note={snap.winchState === 'stalled' ? L('Winch stalled — get a grinder on it (6), low gear, or unload the sheet.', "Winch bloqué — un équipier au winch (6), petite vitesse, ou soulager l'écoute.") : undefined} />
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => sim.prepareSheet()} className={`btn !py-1.5 text-xs ${sim.prepared ? 'bg-good/20 text-good border border-good/40' : 'btn-ghost'}`}>
                 <Anchor size={12} /> {sim.prepared ? L('Sheet ready', 'Écoute prête') : L('Prep lazy sheet', "Préparer l'écoute")} <Kbd>A</Kbd>
@@ -683,6 +692,7 @@ function KeyHelp({ freeMode }: { freeMode: boolean }) {
     ['R', L('Release old sheet', "Larguer l'ancienne écoute")],
     ['Q', L('Winch gear high / low', 'Vitesse winch grande / petite')],
     [L('Shift (hold)', 'Maj (maintenir)'), L('Sprint grind', 'Moulinage sprint')],
+    ['6', L('Grinder on the jib winch (you tail)', 'Équipier au winch de foc (tu embraques)')],
     ['1 – 5', L('Calls: pressure, lull, need speed, can point, speed OK', 'Annonces : risée, molle, besoin de vitesse, on peut serrer, vitesse OK')],
     [L('Space', 'Espace'), L('Pause / resume', 'Pause / reprendre')],
   ];

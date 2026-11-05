@@ -155,6 +155,8 @@ export interface Snapshot {
   energy: number;
   gear: Gear;
   sprint: boolean;
+  /** a second crew member on the jib winch handle (you tail) */
+  grinder: boolean;
   controls: Controls;
   targets: Controls;
   f: ForceResult;
@@ -221,6 +223,13 @@ export class Simulator {
   energy: number;
   gear: Gear;
   sprint = false;
+  /** a second crew member grinds the jib winch while you tail (costs their weight on the rail) */
+  grinder = false;
+  private grinderDone = 0;
+  private grinderWorked = false;
+  /** alone: the handle has to go in when the load comes back (it is out while tailing through a tack) */
+  private handleIn = true;
+  private handleTimer = 0;
   plan: SailPlanState;
   headsailSide: number; // sign of tack the headsail is set for
   helmMode: HelmMode;
@@ -336,6 +345,14 @@ export class Simulator {
     if (g === this.gear) return;
     this.gear = g;
     this.actions.push({ t: this.t, kind: 'gear', label: L(`Winch ${g} gear`, `Winch en ${g === 'low' ? 'petite' : 'grande'} vitesse`), tag: `Winch ${g} gear` });
+  }
+  /** call a crew member to the jib winch (they grind, you tail) or send them back to the rail */
+  setGrinder(on: boolean) {
+    if (on === this.grinder) return;
+    this.grinder = on;
+    this.grinderDone = 0;
+    this.grinderWorked = false;
+    this.actions.push({ t: this.t, kind: 'crew', label: on ? L('Grinder on the jib winch', 'Un équipier au winch de foc') : L('Grinder back on the rail', 'Équipier rendu au rappel'), tag: on ? 'grinder on' : 'grinder off' });
   }
   setSprint(on: boolean) {
     if (on && !this.sprint) this.actions.push({ t: this.t, kind: 'sprint', label: L('Sprint grind', 'Sprint au moulin') });
@@ -842,33 +859,65 @@ export class Simulator {
       const fatigue = 0.35 + 0.65 * (this.energy / 100);
       let ropeSpeed: number;
       let power = 0;
-      if (load < 200) {
+      // by hand (tailing round the drum) as long as the load is light - slower as it builds; past
+      // ~260 N it takes the handle
+      const HAND = 280;
+      if (load < HAND) {
         const inManeuver = this.maneuver && !this.maneuver.done && (this.maneuver.kind === 'tack' || this.maneuver.kind === 'gybe');
-        ropeSpeed = this.p.winch.tailRate * (0.6 + 0.4 * fatigue) * (inManeuver ? (this.prepared ? 1.15 : 0.6) : 1);
+        ropeSpeed = this.p.winch.tailRate * (0.6 + 0.4 * fatigue) * (inManeuver ? (this.prepared ? 1.15 : 0.6) : 1) * Math.sqrt(1 - load / HAND);
         this.winchState = 'tailing';
         energyUse += 0.35;
+        if (inManeuver) this.handleIn = false;
+        if (this.gear === 'low' && inManeuver) this.gear = 'high'; // a fresh tack starts in high gear
+      } else if (!this.handleIn && !(this.grinder || (this.autoTrim && this.autoKeys.has('jibSheet') && this.tws > 12))) {
+        // alone: stop tailing, take the handle, fit it - about a second with the sheet not moving
+        ropeSpeed = 0;
+        this.winchState = 'grinding';
+        this.handleTimer += dt;
+        if (this.handleTimer > 0.9) (this.handleIn = true), (this.handleTimer = 0);
       } else {
+        this.handleIn = true;
         const ma = this.gear === 'high' ? WINCH.highMA : WINCH.lowMA;
         const maxRope = this.gear === 'high' ? WINCH.highMaxRope : WINCH.lowMaxRope;
-        const handleMax = WINCH.handleForce * (this.sprint ? 1.45 : 1) * (0.55 + 0.45 * fatigue);
+        // a grinder: fresh arms on the handle, standing over it (both hands), while you only tail
+        const g = this.grinder || (this.autoTrim && this.autoKeys.has('jibSheet') && this.tws > 12);
+        const handleMax = (g ? WINCH.handleForce * 1.9 : WINCH.handleForce * (0.55 + 0.45 * fatigue)) * (this.sprint ? 1.45 : 1);
         const handleForce = load / ma;
-        const P = (95 + 210 * (this.energy / 100)) * (this.sprint ? 1.8 : 1);
+        const P = (g ? 330 + 60 * (this.energy / 100) : 70 + 150 * (this.energy / 100)) * (this.sprint ? 1.8 : 1);
         if (handleForce > handleMax) {
           ropeSpeed = 0;
           this.winchState = 'stalled';
           this.stallTimer += dt;
-          if (this.stallTimer > 0.8)
-            this.say('pit', this.gear === 'high' ? L('Too loaded for high gear — switch to low gear!', 'Trop chargé pour la grande vitesse — passe en petite vitesse !') : L('Winch is stalled — ease the load or sprint!', 'Winch bloqué — soulage la charge ou sprinte !'), 'warn', 'stall', 5);
+          // a two-speed winch: reverse the handle and you are in low gear
+          if (this.stallTimer > 0.7 && this.gear === 'high') {
+            this.gear = 'low';
+            this.stallTimer = 0;
+            this.actions.push({ t: this.t, kind: 'gear', label: L('Winch low gear (handle reversed)', 'Winch en petite vitesse (manivelle inversée)'), tag: 'Winch low gear auto' });
+          } else if (this.stallTimer > 0.8)
+            this.say('pit', this.gear === 'high' ? L('Too heavy alone — get a grinder on the winch (6) or go to low gear!', 'Trop lourd seul — un équipier au winch (6) ou passe en petite vitesse !') : L('Winch is stalled — get a grinder on it (6) or unload the sheet!', 'Winch bloqué — un équipier au winch (6) ou soulage l’écoute !'), 'warn', 'stall', 5);
           energyUse += this.sprint ? 3.5 : 1.6;
         } else {
           this.stallTimer = 0;
-          ropeSpeed = Math.min(maxRope * (this.sprint ? 1.25 : 1), P / load) * fatigue;
+          // alone you grind one-handed while the self-tailer takes the tail; a grinder stands over it, both hands
+          ropeSpeed = Math.min(maxRope * (g ? 1.35 : 0.75) * (this.sprint ? 1.25 : 1), P / load) * (g ? 1 : fatigue);
           power = ropeSpeed * load;
           this.winchState = 'grinding';
-          energyUse += Math.max(0.3, (power - 60) / 75) * (this.sprint ? 1.6 : 1);
+          energyUse += g ? 0.35 : Math.max(0.3, (power - 60) / 75) * (this.sprint ? 1.6 : 1);
         }
       }
       c.jibSheet = Math.min(tg.jibSheet, c.jibSheet + (ropeSpeed / travel) * dt);
+    }
+    // the grinder is off the rail: less righting moment. Once the sheet is home and the tack is
+    // over, they go back out by themselves
+    if (this.grinder) {
+      c.hike = Math.min(c.hike, 0.72);
+      if (this.winchState === 'grinding') this.grinderWorked = true;
+      const busy = (this.maneuver && !this.maneuver.done) || tg.jibSheet - c.jibSheet > 0.01 || !this.grinderWorked;
+      this.grinderDone = busy ? 0 : this.grinderDone + dt;
+      if (this.grinderDone > 4) {
+        this.setGrinder(false);
+        this.say('pit', L('Sheet home — back on the rail.', 'Écoute à poste — je retourne au rappel.'), 'info', 'grinder', 4);
+      }
     }
     // ---- other controls (move toward targets with rates; some cost crew energy)
     for (const k of Object.keys(CONTROL_RATES) as ControlKey[]) {
@@ -877,7 +926,7 @@ export class Simulator {
       const d = tg[k] - c[k];
       if (Math.abs(d) < 1e-4) continue;
       let rate = d > 0 ? r.up : r.down;
-      if (k === 'jibLead' && this.f.jibSheetLoad > 600) rate *= 0.3; // loaded car barely moves
+      if (k === 'jibLead' && this.f.jibSheetLoad > (this.plan.headsail === 'gennaker' ? 600 : 1900)) rate *= 0.3; // loaded car barely moves
       if (k === 'jibHalyard' && d > 0) rate *= clamp(1.3 - this.f.aws / 30, 0.3, 1);
       if (k === 'mainSheet' && d > 0) rate *= clamp(1.25 - this.f.mainSheetLoad / 2500, 0.35, 1);
       const step = Math.sign(d) * Math.min(Math.abs(d), rate * dt);
@@ -972,6 +1021,7 @@ export class Simulator {
       energy: this.energy,
       gear: this.gear,
       sprint: this.sprint,
+      grinder: this.grinder,
       controls: { ...this.controls },
       targets: { ...this.targets },
       f: this.f,

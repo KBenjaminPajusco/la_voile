@@ -621,7 +621,9 @@ export function evaluate(
     rudder,
     rudderStalled,
     heelEq,
-    jibSheetLoad: jibLoadForce * (gennakerUp ? 0.45 : 0.62),
+    // jib: the sheet carries ~2× the sail force (the clew is pulled back AND down, a small angle to the
+    // leech): ~1.2–1.5 kN at 17 kn, ~450 N at 10 kn on a J/80
+    jibSheetLoad: jibLoadForce * (gennakerUp ? 0.45 : 2.4),
     mainSheetLoad: main.force * 0.55 * (0.3 + 0.7 * c.mainSheet),
   };
 }

@@ -307,18 +307,18 @@ export const SITUATIONS: ScenarioDef[] = [
     id: 'sit-heavy-jib',
     mode: 'situation',
     title: L('The heavy jib', 'Le foc lourd'),
-    subtitle: L('Scenario C — loaded winch, tired arms, tack coming', 'Scénario C — winch chargé, bras fatigués, virement imminent'),
+    subtitle: L('Scenario C — hand vs winch, tired arms, tack coming', 'Scénario C — main ou winch, bras fatigués, virement imminent'),
     level: 5,
     skills: ['energy', 'headsail'],
     pressure: 2,
-    duration: 50,
+    duration: 55,
     brief: L(
-      '17 knots. After the last tack you could not get the final 15 % of jib sheet in — the winch is in high gear and it is too heavy. You are at 45 % energy. The tactician will call another tack in about 35 seconds.',
-      "17 nœuds. Après le dernier virement, tu n'as pas pu reprendre les derniers 15 % d'écoute de foc — le winch est en grande vitesse et c'est trop lourd. Tu es à 45 % d'énergie. Le tacticien annoncera un nouveau virement dans environ 35 secondes.",
+      '17 knots. After the last tack you tailed by hand while the sheet was unloaded, but the load came back before the jib was home: the last 15 % are missing, and alone on the winch it is too heavy. You are at 45 % energy. The tactician will call another tack in about 35 seconds.',
+      "17 nœuds. Au dernier virement, tu as embraqué à la main tant que l'écoute était déchargée, mais la charge est revenue avant que le foc soit à poste : il manque les derniers 15 %, et seul au winch c'est trop lourd. Tu es à 45 % d'énergie. Le tacticien annoncera un nouveau virement dans environ 35 secondes.",
     ),
     task: L(
-      'Decide: accept a slightly imperfect trim, grind hard, change gear, or prioritise another adjustment — and keep enough energy for the next tack.',
-      "Décide : accepter un réglage légèrement imparfait, mouliner fort, changer de vitesse ou donner la priorité à un autre réglage — et garder assez d'énergie pour le prochain virement.",
+      'Get the jib home now without emptying yourself (a grinder on the winch, low gear, or 2 s of height from the helm). Then the next tack: in this breeze, have a grinder on the handle through the tack and go straight to full trim — the helm builds speed from high.',
+      "Remets le foc à poste sans te vider (un équipier au winch, petite vitesse, ou 2 s de cap au barreur). Puis le prochain virement : dans cette brise, un équipier mouline pendant le virement et tu vas directement au bordé max — le barreur relance par le haut.",
     ),
     focusControls: ['jibSheet'],
     config: () => ({
@@ -334,7 +334,7 @@ export const SITUATIONS: ScenarioDef[] = [
     script: [
       { at: 0.1, run: (c) => (c.mark('start'), c.sim.setTarget('jibSheet', 0.68), (c.sim.actions.length = 0), c.prompt(L('Pit: "Jib is still eased — we are slow and low."', 'Piano : « Le foc est encore choqué — on est lents et bas. »'), 'warn', 5)) },
       { at: 30, run: (c) => c.prompt(L('Tactician: "Tack in 5!"', 'Tacticien : « Virement dans 5 ! »'), 'warn', 4) },
-      { at: 35, run: (c) => (c.mark('tack'), (c.data.energyAtTack = c.sim.energy), c.sim.commandTack()) },
+      { at: 35, run: (c) => (c.mark('tack'), (c.data.energyAtTack = c.sim.energy), (c.data.grinderAtTack = c.sim.grinder), c.sim.commandTack()) },
       {
         when: (c) => c.marks.tack !== undefined && Math.abs(c.sim.twa) < 8 && !c.data.autoRel,
         run: (c) => {
@@ -342,34 +342,34 @@ export const SITUATIONS: ScenarioDef[] = [
           if (!c.sim.plan.jibReleased && c.sim.headsailSide === Math.sign(c.sim.twa)) c.prompt(L('Release the old sheet now! (R)', "Largue l'ancienne écoute maintenant ! (R)"), 'alarm', 2);
         },
       },
+      {
+        // how long after the tack call is the jib back at full trim?
+        when: (c) => c.marks.tack !== undefined && c.sim.t > c.marks.tack + 3 && Math.abs(c.sim.twa) > 30 && c.data.homeAt === undefined && c.sim.controls.jibSheet >= optimalControls(17, 38).jibSheet - 0.03,
+        run: (c) => (c.data.homeAt = c.sim.t),
+      },
     ],
     criteria: [
       {
         id: 'decision',
         group: 'Decision',
-        label: L('Smart effort: low gear / brief sprint / unload', 'Effort intelligent : petite vitesse / bref sprint / délester'),
+        label: L('The right help: hand vs winch, a grinder for the tack', 'La bonne aide : main ou winch, un équipier pour le virement'),
         weight: 1.6,
         evaluate: (ctx) => {
-          const gear = ctx.actions.find((a) => a.kind === 'gear' && /low/.test(a.tag ?? a.label) && a.t < 30);
-          const unload = ctx.actions.find((a) => (a.kind === 'mode' && /point/.test(a.tag ?? a.label)) || (a.kind === 'call' && /point/.test(a.tag ?? a.label)));
-          const s = (gear ? 70 : 0) + (unload ? 30 : 0);
+          const before = ctx.actions.find((a) => a.t < 30 && ((a.kind === 'crew' && a.tag === 'grinder on') || (a.kind === 'gear' && /low/.test(a.tag ?? a.label)) || ((a.kind === 'mode' || a.kind === 'call') && /point/.test(a.tag ?? a.label))));
+          const forTack = !!ctx.data.grinderAtTack;
+          const s = (before ? 40 : 0) + (forTack ? 60 : 0);
           const parts = [
-            gear ? L('switched to low gear (more mechanical advantage)', 'es passé en petite vitesse (plus de démultiplication)') : L('stayed in high gear', 'es resté en grande vitesse'),
-            unload
-              ? L('asked the helm to point briefly to unload the sheet', "as demandé au barreur de lofer brièvement pour délester l'écoute")
-              : L('did not use the helm to unload the sheet', "n'as pas utilisé le barreur pour délester l'écoute"),
+            before ? L('got help to bring the jib home before the tack', 'as pris de l’aide pour remettre le foc à poste avant le virement') : L('stayed alone on a winch that was too heavy', 'es resté seul sur un winch trop lourd'),
+            forTack ? L('had a grinder on the handle for the tack', 'avais un équipier au winch pour le virement') : L('tacked without a grinder — in 17 kn the load comes back before you can tail it all by hand', 'as viré sans équipier au winch — à 17 nœuds la charge revient avant que tu aies tout repris à la main'),
           ];
-          return {
-            score: Math.max(s, ctx.sim.telemetry.some((x) => x.t < 30 && x.jibSheet > 0.8) ? 55 : 0),
-            note: L(`You ${parts.join(' and ')}.`, `Tu ${parts.join(' et tu ')}.`),
-          };
+          return { score: s, note: L(`You ${parts.join(' and ')}.`, `Tu ${parts.join(' et tu ')}.`) };
         },
       },
       {
         id: 'trim',
         group: 'Trim adjustments',
-        label: L('Jib trimmed to working range before the tack', 'Foc bordé dans sa plage de travail avant le virement'),
-        weight: 1.3,
+        label: L('Jib home before the tack', 'Foc à poste avant le virement'),
+        weight: 1.1,
         evaluate: (ctx) => {
           const opt = optimalControls(17, 38).jibSheet;
           const s = ctx.tel.filter((x) => x.t > 20 && x.t < 30);
@@ -378,18 +378,32 @@ export const SITUATIONS: ScenarioDef[] = [
         },
       },
       {
+        id: 'home',
+        group: 'Winch effort',
+        label: L('Straight to full trim after the tack', 'Bordé max direct après le virement'),
+        weight: 1.4,
+        evaluate: (ctx) => {
+          const home = ctx.data.homeAt as number | undefined;
+          const tack = ctx.marks.tack;
+          if (tack === undefined) return { score: 0, note: L('No tack.', 'Pas de virement.') };
+          if (home === undefined) return { score: 0, note: L('The jib never got back to full trim after the tack.', "Le foc n'est jamais revenu au bordé max après le virement.") };
+          const dt = home - tack;
+          return {
+            score: scoreLinear(-dt, -20, -9),
+            note: L(`Jib home ${dt.toFixed(0)} s after the tack was called. With a grinder, ~8–10 s; alone in 17 kn it drags on.`, `Foc à poste ${dt.toFixed(0)} s après l'annonce du virement. Avec un équipier au winch, ~8–10 s ; seul dans 17 nœuds, ça traîne.`),
+          };
+        },
+      },
+      {
         id: 'reserve',
         group: 'Winch effort',
-        label: L('Energy reserve at the tack', "Réserve d'énergie au virement"),
-        weight: 1.5,
+        label: L('Energy kept', 'Énergie préservée'),
+        weight: 0.9,
         evaluate: (ctx) => {
           const e = Number(ctx.data.energyAtTack ?? 0);
           return {
             score: scoreLinear(e, 10, 40),
-            note: L(
-              `${Math.round(e)}% energy when the tack was called. Below ~25 % the post-tack grind is slow and the boat stays slow.`,
-              `${Math.round(e)} % d'énergie à l'annonce du virement. En dessous de ~25 %, le moulinage après le virement est lent et le bateau reste lent.`,
-            ),
+            note: L(`${Math.round(e)}% energy when the tack was called.`, `${Math.round(e)} % d'énergie à l'annonce du virement.`),
           };
         },
       },
@@ -400,33 +414,24 @@ export const SITUATIONS: ScenarioDef[] = [
     energyBudget: 35,
     debrief: {
       physics: L(
-        'Sheet load scales with apparent wind speed squared and with how hard the sail is loaded — the last centimetres are the heaviest. Grinding power is limited by human output, so rope speed ≈ power / load. Low gear multiplies handle force (more mechanical advantage) at the cost of speed; a sprint burns energy fast. A brief luff by the helm (pointing for 2 seconds) reduces the angle of attack and sheet load so you can steal the last few centimetres cheaply.',
-        "La charge d'écoute croît avec le carré de la vitesse du vent apparent et avec la charge de la voile — les derniers centimètres sont les plus lourds. La puissance de moulinage est limitée par l'humain, donc vitesse du bout ≈ puissance / charge. La petite vitesse multiplie la force sur la manivelle (plus de démultiplication) au prix de la vitesse ; un sprint brûle l'énergie très vite. Un bref lof du barreur (remonter 2 secondes) réduit l'angle d'incidence et la charge d'écoute pour grappiller les derniers centimètres à moindre coût.",
+        'What matters is not so much the winch gear as what you can take by hand versus what needs the winch. During the tack the sheet is unloaded: you tail by hand, fast. As soon as the jib fills the load comes back (it grows with the apparent wind squared) and from then on every centimetre is ground. In light and medium air you get most of it by hand. From 12–14 kn the load comes back before you are home: a second crew member on the handle while the boat tacks lets you go straight to full trim, and the helm builds speed from high instead of bearing away. Low gear or 2 s of height from the helm (less angle of attack, less load) are the fixes when you are alone.',
+        "Ce qui compte, ce n'est pas tant la vitesse du winch que ce que tu peux reprendre à la main par rapport à ce qu'il faut reprendre au winch. Pendant le virement l'écoute est déchargée : tu embraques à la main, vite. Dès que le foc se remplit, la charge revient (elle croît avec le carré du vent apparent) et chaque centimètre se mouline. En petit temps et médium, on reprend presque tout à la main. Dès 12–14 nœuds, la charge revient avant que tu sois à poste : un deuxième équipier sur la manivelle pendant le virement te permet d'aller directement au bordé max, et le barreur relance par le haut au lieu d'abattre. Seul, la petite vitesse ou 2 s de cap au barreur (moins d'incidence, moins de charge) sont les solutions de secours.",
       ),
       ideal: [
-        L('Switch to low gear — the load is beyond what high gear allows.', 'Passe en petite vitesse — la charge dépasse ce que permet la grande vitesse.'),
-        L(
-          'Ask the helm to point / feather briefly ("give me 2 seconds high") and grind the last centimetres in.',
-          'Demande au barreur de lofer brièvement (« donne-moi 2 secondes haut ») et mouline les derniers centimètres.',
-        ),
-        L(
-          'Accept ~95 % trim if the cost to get 100 % is your whole energy reserve: a tack is coming.',
-          'Accepte ~95 % de réglage si les 100 % coûtent toute ta réserve d\'énergie : un virement arrive.',
-        ),
-        L(
-          'Recover energy before the tack; tail fast during the next tack while the sheet is unloaded.',
-          "Récupère de l'énergie avant le virement ; embraque vite pendant le virement suivant tant que l'écoute est déchargée.",
-        ),
+        L('Now: get a grinder on the winch (or low gear, or "2 seconds high" from the helm) and bring the jib home without emptying yourself.', 'Maintenant : un équipier au winch (ou petite vitesse, ou « 2 secondes haut » au barreur) et remets le foc à poste sans te vider.'),
+        L('Before the tack: the grinder is in place on the new winch.', "Avant le virement : l'équipier est en place au nouveau winch."),
+        L('Through the tack: tail by hand as long as it is unloaded, the grinder takes over when the load comes, straight to full trim.', "Pendant le virement : tu embraques à la main tant que c'est déchargé, l'équipier mouline quand la charge arrive, bordé max direct."),
+        L('Out of the tack: the helm builds speed from high, the grinder goes back on the rail.', "Après le virement : le barreur relance par le haut, l'équipier retourne au rappel."),
       ],
       commonErrors: [
-        L('Sprinting in high gear until exhausted.', "Sprinter en grande vitesse jusqu'à l'épuisement."),
+        L('Fighting the winch alone in 17 kn until exhausted.', "Se battre seul contre le winch dans 17 nœuds jusqu'à l'épuisement."),
+        L('Tacking without a grinder: the jib stays eased and the helm has to bear away to build speed.', 'Virer sans équipier au winch : le foc reste choqué et le barreur doit abattre pour relancer.'),
         L('Ignoring the jib entirely: boat is slow and low for the whole leg.', 'Ignorer complètement le foc : le bateau est lent et bas tout le bord.'),
-        L('Arriving at the tack with 5 % energy.', "Arriver au virement avec 5 % d'énergie."),
       ],
     },
     hints: [
-      L('Gear toggle: Q. Sprint: hold Shift.', 'Changer de vitesse : Q. Sprint : maintenir Maj.'),
-      L('The "Point" call reduces sheet load briefly.', "L'annonce « Lofer » réduit brièvement la charge d'écoute."),
+      L('Grinder on the winch: key 6. Gear: Q.', 'Équipier au winch : touche 6. Vitesse du winch : Q.'),
+      L('The grinder goes back on the rail once the sheet is home: call them again for the tack.', "L'équipier retourne au rappel une fois l'écoute à poste : rappelle-le pour le virement."),
     ],
   },
 

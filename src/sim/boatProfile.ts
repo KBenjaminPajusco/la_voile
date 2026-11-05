@@ -59,7 +59,7 @@ export const J80_PROFILE: BoatProfile = {
   rudderLever: 2.6,
   rudderStall: 13,
   rudderComfort: 7,
-  winch: { highGearRate: 0.32, lowGearRate: 0.13, highGearMaxLoad: 900, lowGearMaxLoad: 2600, tailRate: 1.1 },
+  winch: { highGearRate: 0.32, lowGearRate: 0.13, highGearMaxLoad: 900, lowGearMaxLoad: 2600, tailRate: 0.9 },
   jibSheetTravel: 2.6,
   mainSheetTravel: 2.2,
 };
