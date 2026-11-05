@@ -23,12 +23,45 @@ interface MoldData {
   index: number[];
 }
 
+/** one level of midpoint subdivision (each triangle -> 4, shared edge midpoints so nothing cracks):
+ *  the luff roll wraps the front of the cloth through ~200 deg and needs the finer mesh to stay smooth */
+function subdivide(d: MoldData): MoldData {
+  const pos = [...d.pos];
+  const uv = [...d.uv];
+  const h = [...d.h];
+  const t = [...d.t];
+  const index: number[] = [];
+  const mids = new Map<string, number>();
+  const mid = (a: number, b: number) => {
+    const key = a < b ? `${a}_${b}` : `${b}_${a}`;
+    const hit = mids.get(key);
+    if (hit !== undefined) return hit;
+    const k = h.length;
+    for (let c = 0; c < 3; c++) pos.push((pos[a * 3 + c] + pos[b * 3 + c]) / 2);
+    for (let c = 0; c < 2; c++) uv.push((uv[a * 2 + c] + uv[b * 2 + c]) / 2);
+    h.push((h[a] + h[b]) / 2);
+    t.push((t[a] + t[b]) / 2);
+    mids.set(key, k);
+    return k;
+  };
+  for (let i = 0; i < d.index.length; i += 3) {
+    const a = d.index[i];
+    const b = d.index[i + 1];
+    const c = d.index[i + 2];
+    const ab = mid(a, b);
+    const bc = mid(b, c);
+    const ca = mid(c, a);
+    index.push(a, ab, ca, ab, b, bc, ca, bc, c, ab, bc, ca);
+  }
+  return { ...d, pos, uv, h, t, index };
+}
+
 let cache: Promise<MoldData> | null = null;
 function loadData() {
   if (!cache)
     cache = fetch(`${BASE}3d/j80/kite.json`).then((r) => {
       if (!r.ok) throw new Error(`kite mold ${r.status}`);
-      return r.json() as Promise<MoldData>;
+      return (r.json() as Promise<MoldData>).then(subdivide);
     });
   return cache;
 }
@@ -204,7 +237,7 @@ export class KiteMold {
       this.sample(hh, 1, tmp);
       const chord = tmp.distanceTo(this.sample(hh, 0, B));
       const len = tc * chord; // cloth forward of the break
-      const phiMax = Math.min(Math.PI * 1.15, amount * Math.PI * 1.3); // how far over it rolls
+      const phiMax = Math.min(Math.PI * 1.25, amount * Math.PI * 1.4); // how far over it rolls
       const R = len / Math.max(0.3, phiMax);
       const e = { a: A.clone(), u: U.clone(), nW: N.clone(), R, tc, phiMax };
       cache[b] = e;
@@ -222,9 +255,38 @@ export class KiteMold {
     });
     const P = new THREE.Vector3();
     const Q = new THREE.Vector3();
+    // the roll is not a cylinder: the cloth leaves the sail tangentially at the break and bends more
+    // and more towards the luff edge (curvature growing linearly, so the turn angle grows as f^2) -
+    // a smooth hook, like the real thing. The profile is integrated once per band.
+    const STEPS = 40;
+    const prof = new Map<Band, Float32Array>();
+    const profile = (e: Band) => {
+      let p = prof.get(e);
+      if (p) return p;
+      p = new Float32Array((STEPS + 1) * 2);
+      const len = e.R * Math.max(0.3, e.phiMax); // cloth length forward of the break
+      const ds = len / STEPS;
+      let x = 0;
+      let y = 0;
+      for (let j = 1; j <= STEPS; j++) {
+        const f = (j - 0.5) / STEPS;
+        const phi = e.phiMax * f * f;
+        x += Math.cos(phi) * ds;
+        y += Math.sin(phi) * ds;
+        p[j * 2] = x;
+        p[j * 2 + 1] = y;
+      }
+      prof.set(e, p);
+      return p;
+    };
     const place = (e: Band, t: number, out: THREE.Vector3) => {
-      const phi = Math.min(e.phiMax, ((e.tc - Math.min(t, e.tc)) / e.tc) * e.phiMax);
-      return out.copy(e.a).addScaledVector(e.u, -e.R * Math.sin(phi)).addScaledVector(e.nW, e.R * (1 - Math.cos(phi)));
+      const p = profile(e);
+      const f = Math.min(1, (e.tc - Math.min(t, e.tc)) / e.tc) * STEPS;
+      const j = Math.min(STEPS - 1, Math.floor(f));
+      const w = f - j;
+      const x = p[j * 2] * (1 - w) + p[(j + 1) * 2] * w;
+      const y = p[j * 2 + 1] * (1 - w) + p[(j + 1) * 2 + 1] * w;
+      return out.copy(e.a).addScaledVector(e.u, -x).addScaledVector(e.nW, y);
     };
     for (let i = 0; i < n; i++) {
       const h = this.h[i];
