@@ -254,6 +254,64 @@ export function Cockpit({
         }}
       />
     ) : null;
+  const sessionCtl = (compact: boolean) => (
+        <div className={`flex flex-wrap items-center ${compact ? 'gap-2' : 'gap-4'}`}>
+          {hud.map((h) => (
+            <div key={h.label} className="text-right">
+              <div className="text-[10px] uppercase tracking-wider text-slate-400">{h.label}</div>
+              <div className={`num text-sm font-semibold ${h.tone ? toneText[h.tone] : 'text-white'}`}>{h.value}</div>
+            </div>
+          ))}
+          {!hud.length && (
+            <div className="text-right">
+              <div className="text-[10px] uppercase tracking-wider text-slate-400">{freeMode ? L('Session', 'Session') : L('Time left', 'Temps restant')}</div>
+              <div className="num text-sm font-semibold text-white">{freeMode ? `${Math.floor(snap.t / 60)}:${String(Math.floor(snap.t % 60)).padStart(2, '0')}` : `${remaining.toFixed(0)} s`}</div>
+            </div>
+          )}
+          {canEasy && (
+            <div className="flex items-center gap-1">
+              <button onClick={() => setEasy(!easy)} title={L('Easy mode: time stops when you need to act, hints on request', 'Mode facile : le temps s’arrête quand il faut agir, indices à la demande')} className={`btn !px-2 !py-1 text-xs ${easy ? 'bg-good/25 text-good border border-good/40' : 'btn-ghost'}`}>
+                <GraduationCap size={13} /> {L('Easy', 'Facile')}
+              </button>
+              {easy && started && (
+                <button onClick={askHint} className="btn-ghost !px-2 !py-1 text-xs">
+                  <Lightbulb size={13} /> {L('Hint', 'Indice')}
+                </button>
+              )}
+            </div>
+          )}
+          <div className="flex items-center gap-1">
+            {[0.5, 1, 2].map((s) => (
+              <button key={s} onClick={() => setTimeScale(s)} className={`num rounded px-1.5 py-0.5 text-[11px] ${timeScale === s ? 'bg-cyan-400 text-navy-950' : 'text-slate-400 hover:text-white'}`}>
+                ×{s}
+              </button>
+            ))}
+          </div>
+          <button className={`${paused ? 'btn-primary' : 'btn-ghost'} ${compact ? '!px-2 !py-1 text-xs' : ''}`} onClick={() => (setPaused((p) => !p), setStarted(true))}>
+            {paused ? <Play size={compact ? 13 : 16} /> : <Pause size={compact ? 13 : 16} />} {paused ? (started ? L('Resume', 'Reprendre') : L('Start', 'Démarrer')) : L('Pause', 'Pause')}
+          </button>
+          <button className={`btn-ghost ${compact ? '!px-2 !py-1' : ''}`} onClick={restart} title={L('Restart', 'Recommencer')}>
+            <RotateCcw size={16} />
+          </button>
+          <button
+            className={`btn-ghost ${compact ? '!px-2 !py-1 text-xs' : ''}`}
+            onClick={() => {
+              const r = runnerRef.current;
+              r.finished = true;
+              r.endReason = 'stopped';
+            }}
+            title={L('End & debrief', 'Terminer et débriefer')}
+          >
+            <Square size={16} /> {L('End', 'Fin')}
+          </button>
+          <button className={`btn-ghost ${compact ? '!px-2 !py-1' : ''}`} onClick={() => setShowKeys((v) => !v)} title={L('Keyboard', 'Clavier')}>
+            <Keyboard size={16} />
+          </button>
+          <button className={`btn-ghost ${compact ? '!px-2 !py-1 text-xs' : ''}`} onClick={onExit}>
+            {L('Exit', 'Quitter')}
+          </button>
+        </div>
+  );
   const overlay3d = fit ? (
     <div className="space-y-1">
       {prompts.slice(-2).map((p, i) => (
@@ -279,7 +337,7 @@ export function Cockpit({
                 <span className="text-[10px] uppercase tracking-[0.16em] text-slate-400">{L('Boat speed', 'Vitesse bateau')}</span>
                 <span className={`num text-xs ${toneText[perfTone]}`}>{Math.round(snap.perf * 100)}% {L('target', 'cible')}</span>
               </div>
-              <div className="num text-4xl font-semibold text-white">
+              <div className={`num font-semibold text-white ${fit ? 'text-3xl leading-tight' : 'text-4xl'}`}>
                 {snap.v.toFixed(2)}
                 <span className="ml-1 text-sm text-slate-400">kn</span>
               </div>
@@ -387,6 +445,19 @@ export function Cockpit({
           </div>
     </>
   );
+  const viewToggles = (
+            <div className="flex gap-1">
+              <button onClick={() => setView('top')} className={`rounded px-2 py-1 text-xs ${view === 'top' ? 'bg-cyan-400/20 text-cyan-200' : 'text-slate-400'}`}>
+                {L('Top view', 'Vue de dessus')}
+              </button>
+              <button onClick={() => setView('shape')} className={`rounded px-2 py-1 text-xs ${view === 'shape' ? 'bg-cyan-400/20 text-cyan-200' : 'text-slate-400'}`}>
+                {L('Sail shape', 'Forme des voiles')}
+              </button>
+              <button onClick={() => setView('3d')} className={`rounded px-2 py-1 text-xs ${view === '3d' ? 'bg-cyan-400/20 text-cyan-200' : 'text-slate-400'}`}>
+                {L('3D trimmer POV', 'Vue 3D régleur')}
+              </button>
+            </div>
+  );
   const viewTabs = (
     <>
           <div className="mb-2 flex items-center justify-between">
@@ -421,7 +492,7 @@ export function Cockpit({
   const view3dEl = (
     <>
               <Suspense fallback={<div className="grid h-[520px] place-items-center text-sm text-slate-400">{L('Loading 3D…', 'Chargement 3D…')}</div>}>
-                <Boat3DView getSim={() => runnerRef.current.sim} snap={snap} assist={freeMode} overlay={overlay3d} height={fit ? fitH - 58 : view3dH} />
+                <Boat3DView getSim={() => runnerRef.current.sim} snap={snap} assist={freeMode} overlay={overlay3d} height={fit ? fitH - (started ? 46 : 54) : view3dH} />
               </Suspense>
     </>
   );
@@ -619,70 +690,17 @@ export function Cockpit({
     </>
   );
   return (
-    <div className="space-y-3">
-      {/* ---------- top bar */}
+    <div className={fit ? 'space-y-2' : 'space-y-3'}>
+      {/* ---------- top bar (in the 3D cockpit, once started, it moves into the strip above the view) */}
+      {!(fit && started) && (
       <div className="panel flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
         <div className="min-w-0">
           <div className="font-display text-lg font-bold uppercase tracking-wider text-white">{def.title}</div>
           <div className="truncate text-xs text-slate-400">{def.subtitle}</div>
         </div>
-        <div className="flex flex-wrap items-center gap-4">
-          {hud.map((h) => (
-            <div key={h.label} className="text-right">
-              <div className="text-[10px] uppercase tracking-wider text-slate-400">{h.label}</div>
-              <div className={`num text-sm font-semibold ${h.tone ? toneText[h.tone] : 'text-white'}`}>{h.value}</div>
-            </div>
-          ))}
-          {!hud.length && (
-            <div className="text-right">
-              <div className="text-[10px] uppercase tracking-wider text-slate-400">{freeMode ? L('Session', 'Session') : L('Time left', 'Temps restant')}</div>
-              <div className="num text-sm font-semibold text-white">{freeMode ? `${Math.floor(snap.t / 60)}:${String(Math.floor(snap.t % 60)).padStart(2, '0')}` : `${remaining.toFixed(0)} s`}</div>
-            </div>
-          )}
-          {canEasy && (
-            <div className="flex items-center gap-1">
-              <button onClick={() => setEasy(!easy)} title={L('Easy mode: time stops when you need to act, hints on request', 'Mode facile : le temps s’arrête quand il faut agir, indices à la demande')} className={`btn !px-2 !py-1 text-xs ${easy ? 'bg-good/25 text-good border border-good/40' : 'btn-ghost'}`}>
-                <GraduationCap size={13} /> {L('Easy', 'Facile')}
-              </button>
-              {easy && started && (
-                <button onClick={askHint} className="btn-ghost !px-2 !py-1 text-xs">
-                  <Lightbulb size={13} /> {L('Hint', 'Indice')}
-                </button>
-              )}
-            </div>
-          )}
-          <div className="flex items-center gap-1">
-            {[0.5, 1, 2].map((s) => (
-              <button key={s} onClick={() => setTimeScale(s)} className={`num rounded px-1.5 py-0.5 text-[11px] ${timeScale === s ? 'bg-cyan-400 text-navy-950' : 'text-slate-400 hover:text-white'}`}>
-                ×{s}
-              </button>
-            ))}
-          </div>
-          <button className={paused ? 'btn-primary' : 'btn-ghost'} onClick={() => (setPaused((p) => !p), setStarted(true))}>
-            {paused ? <Play size={16} /> : <Pause size={16} />} {paused ? (started ? L('Resume', 'Reprendre') : L('Start', 'Démarrer')) : L('Pause', 'Pause')}
-          </button>
-          <button className="btn-ghost" onClick={restart} title={L('Restart', 'Recommencer')}>
-            <RotateCcw size={16} />
-          </button>
-          <button
-            className="btn-ghost"
-            onClick={() => {
-              const r = runnerRef.current;
-              r.finished = true;
-              r.endReason = 'stopped';
-            }}
-            title={L('End & debrief', 'Terminer et débriefer')}
-          >
-            <Square size={16} /> {L('End', 'Fin')}
-          </button>
-          <button className="btn-ghost" onClick={() => setShowKeys((v) => !v)} title={L('Keyboard', 'Clavier')}>
-            <Keyboard size={16} />
-          </button>
-          <button className="btn-ghost" onClick={onExit}>
-            {L('Exit', 'Quitter')}
-          </button>
-        </div>
+        {sessionCtl(false)}
       </div>
+      )}
 
       {showKeys && <KeyHelp freeMode={freeMode} />}
 
@@ -788,9 +806,9 @@ export function Cockpit({
 
       {/* ---------- 3D cockpit that fits the screen: telemetry, comms and sliders split on both sides of the view */}
       {fit && (
-        <div ref={fitRef} className="grid grid-cols-[290px_minmax(0,1fr)_340px] gap-2" style={{ height: fitH }}>
-          <div className="flex min-h-0 flex-col gap-2 overflow-y-auto pr-0.5">
-            <div className="panel space-y-2 p-2.5">
+        <div ref={fitRef} className="fitc grid grid-cols-[280px_minmax(0,1fr)_330px] gap-1.5" style={{ height: fitH }}>
+          <div className="flex min-h-0 flex-col gap-1.5 overflow-y-auto pr-0.5">
+            <div className="panel space-y-1.5 p-2">
               <div className="grid grid-cols-2 gap-1">
                 {speedCard}
                 {gauges}
@@ -798,14 +816,26 @@ export function Cockpit({
               {windGrid}
               {chips}
             </div>
-            <div className="panel p-2.5">{jibStation}</div>
-            <div className="panel flex min-h-[110px] flex-1 flex-col p-2.5">
+            <div className="panel p-2">{jibStation}</div>
+            <div className="panel flex min-h-[90px] flex-1 flex-col p-2">
               <div className="panel-title mb-1.5">{L('Crew comms', 'Communication équipage')}</div>
               {commsList}
             </div>
           </div>
-          <div className="panel flex min-h-0 flex-col p-2">
-            {viewTabs}
+          <div className="panel flex min-h-0 flex-col p-1.5">
+            {started ? (
+              <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="truncate font-display text-sm font-bold uppercase tracking-wider text-white" title={def.subtitle}>
+                    {def.title}
+                  </span>
+                  {viewToggles}
+                </div>
+                {sessionCtl(true)}
+              </div>
+            ) : (
+              viewTabs
+            )}
             {view3dEl}
           </div>
           <div className="flex min-h-0 flex-col gap-2 overflow-y-auto pr-0.5">

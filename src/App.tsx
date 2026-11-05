@@ -153,7 +153,7 @@ export default function App() {
           <span className="num text-xs text-cyan-200">L{lvl.level}</span>
         </div>
         {/* a running session (simulator, situation, maneuver, race) takes the whole width: the 3D is the point */}
-        <div className={`mx-auto px-4 py-5 sm:px-6 lg:py-7 ${['simulator', 'situations', 'maneuvers'].includes(section) && param ? 'max-w-none 2xl:px-8' : 'max-w-[1500px]'}`}>{page}</div>
+        <div className={`mx-auto px-4 sm:px-6 ${['simulator', 'situations', 'maneuvers'].includes(section) && param ? 'max-w-none py-2 lg:py-2.5 2xl:px-6' : 'max-w-[1500px] py-5 lg:py-7'}`}>{page}</div>
       </main>
     </div>
   );
