@@ -14,6 +14,7 @@ export function ControlSlider({
   disabled,
   note,
   step = 0.04,
+  compact = false,
 }: {
   label: string;
   actual: number;
@@ -26,19 +27,23 @@ export function ControlSlider({
   disabled?: boolean;
   note?: string;
   step?: number;
+  /** side columns of the 3D cockpit: one line of labels, tighter */
+  compact?: boolean;
 }) {
   const moving = Math.abs(actual - target) > 0.005;
   return (
-    <div className={`rounded-lg border px-3 py-2 ${highlight ? 'border-cyan-300/40 bg-cyan-400/5' : 'border-cyan-300/10 bg-navy-850/60'} ${disabled ? 'opacity-40' : ''}`}>
+    <div className={`rounded-lg border ${compact ? 'px-2 py-1' : 'px-3 py-2'} ${highlight ? 'border-cyan-300/40 bg-cyan-400/5' : 'border-cyan-300/10 bg-navy-850/60'} ${disabled ? 'opacity-40' : ''}`}>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-300">{label}</span>
+        <span className={`truncate font-semibold uppercase text-slate-300 ${compact ? 'text-[10.5px] tracking-wide' : 'text-[11px] tracking-wider'}`} title={compact && keys ? `${label} — ${leftLabel ?? ''} ${keys[0]} / ${keys[1]} ${rightLabel ?? ''}` : undefined}>
+          {label}
+        </span>
         <span className="num text-xs text-white">
           {Math.round(actual * 100)}
           <span className="text-slate-500">%</span>
           {moving && <span className="ml-1 text-cyan-300">→{Math.round(target * 100)}</span>}
         </span>
       </div>
-      <div className="relative mt-1 flex items-center gap-1.5">
+      <div className={`relative flex items-center gap-1.5 ${compact ? 'mt-0' : 'mt-1'}`}>
         <button className="grid h-6 w-6 shrink-0 place-items-center rounded border border-cyan-300/15 text-slate-300 hover:bg-navy-700" onClick={() => onChange(Math.max(0, target - step))} disabled={disabled} aria-label={L(`${label} decrease`, `${label} diminuer`)}>
           <Minus size={12} />
         </button>
@@ -50,7 +55,7 @@ export function ControlSlider({
           <Plus size={12} />
         </button>
       </div>
-      <div className="mt-0.5 flex items-center justify-between text-[10px] text-slate-500">
+      {!compact && <div className="mt-0.5 flex items-center justify-between text-[10px] text-slate-500">
         <span>{leftLabel}</span>
         {keys && (
           <span className="flex gap-1">
@@ -59,7 +64,7 @@ export function ControlSlider({
           </span>
         )}
         <span>{rightLabel}</span>
-      </div>
+      </div>}
       {note && <div className="mt-1 text-[10px] text-warn">{note}</div>}
     </div>
   );
