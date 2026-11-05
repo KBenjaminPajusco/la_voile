@@ -393,7 +393,7 @@ export const LESSONS_FR_BEHAVIOR: Lesson[] = [
     effects: [
       { target: `Fente`, effect: `Une fente parallèle garde les deux voiles efficaces.` },
       { target: `Barre`, effect: `La GV dose la barre ; le foc donne le rythme et le cap.` },
-      { target: `Cap`, effect: `L'upwash de la GV permet au foc de monter plus.` },
+      { target: `Cap`, effect: `Une chute de foc qui prolonge l'extrados de la GV laisse border pour le cap sans étouffer la fente.` },
     ],
     interactions: [
       { control: `Écoute / chariot de foc`, relation: `Le réglage et le vrillage du foc fixent la forme de la fente ; la GV doit s'y accorder.` },
@@ -407,7 +407,7 @@ export const LESSONS_FR_BEHAVIOR: Lesson[] = [
       `Sur-border la GV par rapport au foc et charger la barre.`,
     ],
     keyPoints: [
-      `L'upwash de la GV aide le foc à monter.`,
+      `La chute du foc prolonge l'extrados de la GV : parallèle, et même vrillage du bas en haut.`,
       `Le foc mène, la GV suit.`,
       `Gardez la fente parallèle et les chutes qui vrillent ensemble.`,
       `Un peu de dévent dans la brise, ça va.`,
@@ -426,16 +426,20 @@ export const LESSONS_FR_BEHAVIOR: Lesson[] = [
     },
     check: [
       {
-        question: `Comment la GV aide-t-elle le foc ?`,
-        options: [`En bloquant le vent`, `Son upwash fait voir au foc un vent plus adonnant qui lui permet de monter plus`, `Elle ne l'aide pas`],
+        question: `Qu'est-ce qui fait travailler le foc et la GV comme une seule aile ?`,
+        options: [
+          `Une fente la plus fermée possible, pour accélérer l'air sur la GV`,
+          `La continuité des chutes : la chute du foc prolonge l'extrados de la GV, parallèle, et les deux vrillent ensemble`,
+          `Chaque voile réglée seule à son optimum`,
+        ],
         correct: 1,
-        explanation: `La circulation de la GV crée un upwash devant elle.`,
+        explanation: `Le flux qui quitte la chute du foc doit continuer le long de l'extrados de la GV. Chute de foc fermée : elle souffle dans la GV (dévent). Trop ouverte : les deux faces de l'aile s'écartent. Et si les vrillages ne sont pas accordés, la fente est juste en bas mais fausse en haut.`,
       },
       {
         question: `La GV est en dévent loin derrière le guindant et la chute du foc est fermée. Que changez-vous d'abord ?`,
         options: [`Border la GV plus fort`, `Ouvrir la chute du foc (choquer ou reculer le chariot)`, `Choquer la bordure`],
         correct: 1,
-        explanation: `La chute de foc fermée étouffe la fente.`,
+        explanation: `La chute de foc fermée étouffe la fente : son flux tape dans l'extrados de la GV au lieu de le prolonger. On rouvre la chute du foc d'abord, la GV suivra.`,
       },
     ],
   },

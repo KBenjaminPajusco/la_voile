@@ -1733,7 +1733,7 @@ const BEHAVIOR: Lesson[] = [
     effects: [
       { target: 'Slot', effect: `A parallel slot keeps both sails efficient.` },
       { target: 'Helm', effect: `The main tunes helm; the jib sets pace and pointing.` },
-      { target: 'Pointing', effect: `Upwash from the main lets the jib point higher.` },
+      { target: 'Pointing', effect: `A jib leech that carries on along the main's lee side lets you trim for height without choking the slot.` },
     ],
     interactions: [
       { control: 'Jib sheet / lead', relation: `Jib trim and twist set the slot shape; the main must match.` },
@@ -1747,7 +1747,7 @@ const BEHAVIOR: Lesson[] = [
       `Over-trimming the main relative to the jib, loading the helm.`,
     ],
     keyPoints: [
-      `Main upwash helps the jib point.`,
+      `The jib leech carries on along the main's lee side: parallel, and twisting the same way from foot to head.`,
       `Jib leads, main follows.`,
       `Keep the slot parallel and leeches twisting together.`,
       `Some backwind in breeze is OK.`,
@@ -1766,16 +1766,20 @@ const BEHAVIOR: Lesson[] = [
     },
     check: [
       {
-        question: `How does the main help the jib?`,
-        options: [`By blocking the wind`, `Its upwash lets the jib see a freer wind and point higher`, `It doesn't`],
+        question: `What makes the jib and the main work as one wing?`,
+        options: [
+          `A slot as tight as possible, to speed the air over the main`,
+          `Leech continuity: the jib leech carries on along the main's lee side, parallel, and both leeches twist together`,
+          `Each sail trimmed on its own to its optimum`,
+        ],
         correct: 1,
-        explanation: `The main's circulation creates upwash ahead of it.`,
+        explanation: `The flow leaving the jib leech must carry on along the main's lee side. A hooked jib leech blows into the main (backwind); too open and the two skins of the wing split apart. And if the twists don't match, the slot is right at the foot but wrong aloft.`,
       },
       {
         question: `The main is backwinded well aft of the luff and the jib leech is hooked. What do you change first?`,
         options: [`Trim the main harder`, `Open the jib leech (ease or lead aft)`, `Ease the outhaul`],
         correct: 1,
-        explanation: `The hooked jib leech chokes the slot.`,
+        explanation: `The hooked jib leech chokes the slot: its flow hits the main's lee side instead of carrying on along it. Open the jib leech first; the main follows.`,
       },
     ],
   },
