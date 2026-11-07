@@ -59,6 +59,8 @@ const COLORS: Record<string, string> = {
 interface PathPoint {
   c: Controls;
   v: number;
+  /** seconds since the optimisation started */
+  t: number;
 }
 
 export function VppPanel({ snap, sea, onSet, onAll, onClose }: { snap: Snapshot; sea: number; onSet: (k: ControlKey, v: number) => void; onAll: () => void; onClose: () => void }) {
@@ -82,12 +84,12 @@ export function VppPanel({ snap, sea, onSet, onAll, onClose }: { snap: Snapshot;
   const [running, setRunning] = useState(false);
   const [path, setPath] = useState<PathPoint[]>([]);
   const [done, setDone] = useState(false);
-  const run = useRef<{ c: Controls; tws: number; twa: number; step: number; quiet: number } | null>(null);
+  const run = useRef<{ c: Controls; tws: number; twa: number; step: number; quiet: number; t0: number } | null>(null);
   const start = () => {
     const sn = snapRef.current;
     const c = { ...sn.targets };
-    run.current = { c, tws: sn.tws, twa: sn.twa, step: 0.02, quiet: 0 };
-    setPath([{ c: { ...c }, v: solve(c, sn.tws, sn.twa, sn.plan, sea).v }]);
+    run.current = { c, tws: sn.tws, twa: sn.twa, step: 0.02, quiet: 0, t0: performance.now() };
+    setPath([{ c: { ...c }, v: solve(c, sn.tws, sn.twa, sn.plan, sea).v, t: 0 }]);
     setDone(false);
     setRunning(true);
   };
@@ -129,7 +131,7 @@ export function VppPanel({ snap, sea, onSet, onAll, onClose }: { snap: Snapshot;
         r.c = next;
         r.quiet = v1 - v0 < 0.001 ? r.quiet + 1 : 0;
         for (const k of keys) onSet(k, Math.round(next[k] * 1000) / 1000);
-        setPath((p) => [...p, { c: { ...next }, v: v1 }]);
+        setPath((p) => [...p, { c: { ...next }, v: v1, t: (performance.now() - r.t0) / 1000 }]);
         if (r.quiet >= 8 || path.length > 400) finished = true;
       }
       if (finished) {
@@ -141,7 +143,7 @@ export function VppPanel({ snap, sea, onSet, onAll, onClose }: { snap: Snapshot;
   }, [running]); // eslint-disable-line react-hooks/exhaustive-deps
   const exportCsv = () => {
     const keys = keysFor(kite);
-    const rows = [['step', 'speed_kn', ...keys].join(','), ...path.map((p, i) => [i, p.v.toFixed(3), ...keys.map((k) => p.c[k].toFixed(3))].join(','))];
+    const rows = [['step', 'time_s', 'speed_kn', ...keys].join(','), ...path.map((p, i) => [i, p.t.toFixed(2), p.v.toFixed(3), ...keys.map((k) => p.c[k].toFixed(3))].join(','))];
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([rows.join(String.fromCharCode(10))], { type: 'text/csv' }));
     a.download = `trimmaster-vmax-${snap.tws.toFixed(0)}kn-${Math.abs(snap.twa).toFixed(0)}deg.csv`;
@@ -151,7 +153,7 @@ export function VppPanel({ snap, sea, onSet, onAll, onClose }: { snap: Snapshot;
 
   const vMax = Math.max(...data.curves.flatMap((c) => c.vs), data.target);
   const vMin = Math.max(0, Math.min(...data.curves.flatMap((c) => c.vs)));
-  const lo = Math.min(Math.max(vMin, vMax - Math.max(1.2, (vMax - vMin) * 0.6)), ...(path.length > 1 ? path.map((p) => p.v - 0.05) : [Infinity]));
+  const lo = Math.max(vMin, vMax - Math.max(1.2, (vMax - vMin) * 0.6));
   const W = 150;
   const H = 54;
   const PX = (x: number) => 4 + x * (W - 8);
@@ -186,7 +188,7 @@ export function VppPanel({ snap, sea, onSet, onAll, onClose }: { snap: Snapshot;
           return (
             <div key={c.k} className="rounded border border-cyan-300/10 bg-navy-900/70 px-1.5 pb-1 pt-1">
               <div className="flex items-baseline justify-between gap-1 text-[10.5px]">
-                <span className="truncate font-semibold uppercase text-slate-300" style={path.length > 1 ? { color: COLORS[c.k] } : undefined}>{label(c.k)}</span>
+                <span className="truncate font-semibold uppercase text-slate-300">{label(c.k)}</span>
                 <span className="num shrink-0 text-white">{Math.round(c.cur * 100)}%</span>
               </div>
               <svg
@@ -202,14 +204,6 @@ export function VppPanel({ snap, sea, onSet, onAll, onClose }: { snap: Snapshot;
                 <line x1={4} x2={W - 4} y1={PY(data.target)} y2={PY(data.target)} stroke="rgba(148,163,184,0.3)" strokeDasharray="2 3" />
                 <line x1={PX(c.opt)} x2={PX(c.opt)} y1={2} y2={H - 2} stroke="#67e8f9" strokeOpacity={0.6} strokeDasharray="2 2" />
                 <polyline points={pts} fill="none" stroke="#22d3ee" strokeWidth={1.6} />
-                {/* the optimisation path for this setting, in its colour: start (ring) to end (dot) */}
-                {path.length > 1 && (
-                  <g>
-                    <polyline points={path.map((p) => `${PX(p.c[c.k]).toFixed(1)},${PY(p.v).toFixed(1)}`).join(' ')} fill="none" stroke={COLORS[c.k]} strokeWidth={1.8} strokeLinejoin="round" opacity={0.95} />
-                    <circle cx={PX(path[0].c[c.k])} cy={PY(path[0].v)} r={2.4} fill="none" stroke={COLORS[c.k]} strokeWidth={1.2} />
-                    <circle cx={PX(path[path.length - 1].c[c.k])} cy={PY(path[path.length - 1].v)} r={2.4} fill={COLORS[c.k]} />
-                  </g>
-                )}
                 <line x1={PX(c.cur)} x2={PX(c.cur)} y1={2} y2={H - 2} stroke="#fff" strokeWidth={1.2} />
                 <circle cx={PX(c.best)} cy={PY(c.vBest)} r={2.6} fill="#34d399" />
               </svg>
@@ -230,20 +224,30 @@ export function VppPanel({ snap, sea, onSet, onAll, onClose }: { snap: Snapshot;
       {path.length > 1 && (() => {
         const keys = keysFor(kite);
         const CW = 600;
-        const CH = 130;
+        const CH = 150;
         const n = path.length - 1;
         const vs = path.map((p) => p.v);
         const v0 = Math.min(...vs);
         const v1 = Math.max(...vs);
-        const sx = (i: number) => 30 + (i / Math.max(1, n)) * (CW - 70);
-        const sy = (x: number) => 8 + (1 - x) * (CH - 22);
-        const sv = (v: number) => 8 + (1 - (v - v0) / Math.max(0.02, v1 - v0)) * (CH - 22);
+        const T = Math.max(0.2, path[n].t);
+        const top = 20;
+        const bot = CH - 18;
+        const sx = (t: number) => 30 + (t / T) * (CW - 70);
+        const sy = (x: number) => top + (1 - x) * (bot - top);
+        const sv = (v: number) => top + (1 - (v - v0) / Math.max(0.02, v1 - v0)) * (bot - top);
+        // nice ticks: seconds below, steps above
+        const tStep = T > 40 ? 10 : T > 16 ? 5 : T > 6 ? 2 : 1;
+        const tTicks: number[] = [];
+        for (let x = 0; x <= T + 1e-6; x += tStep) tTicks.push(x);
+        const nStep = n > 120 ? 25 : n > 50 ? 10 : n > 20 ? 5 : n > 8 ? 2 : 1;
+        const nTicks: number[] = [];
+        for (let i = 0; i <= n; i += nStep) nTicks.push(i);
         return (
           <div className="mt-2 rounded border border-cyan-300/15 bg-navy-900/70 p-1.5">
             <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
               <span className="font-semibold uppercase tracking-wider text-cyan-200">{L('Path to Vmax', 'Trajectoire vers Vmax')}</span>
               <span className="num text-slate-300">
-                {vs[0].toFixed(2)} → <span className="text-good">{v1.toFixed(2)} kn</span> · {n} {L('steps', 'pas')}
+                {vs[0].toFixed(2)} → <span className="text-good">{v1.toFixed(2)} kn</span> · {T.toFixed(1)} s · {n} {L('steps', 'pas')}
                 {done && <span className="ml-1 text-good">· {L('Vmax reached', 'Vmax atteinte')}</span>}
               </span>
               <span className="flex gap-1">
@@ -256,16 +260,33 @@ export function VppPanel({ snap, sea, onSet, onAll, onClose }: { snap: Snapshot;
               </span>
             </div>
             <svg viewBox={`0 0 ${CW} ${CH}`} className="mt-1 block w-full">
+              {/* x2 (top): steps */}
+              <line x1={30} x2={CW - 40} y1={top - 6} y2={top - 6} stroke="rgba(148,163,184,0.35)" />
+              {nTicks.map((i) => (
+                <g key={`n${i}`}>
+                  <line x1={sx(path[i].t)} x2={sx(path[i].t)} y1={top - 9} y2={top - 6} stroke="#64748b" />
+                  <text x={sx(path[i].t)} y={top - 11} fontSize={8.5} textAnchor="middle" fill="#94a3b8">{i}</text>
+                </g>
+              ))}
+              <text x={CW - 36} y={top - 8} fontSize={8.5} fill="#94a3b8">{L('steps', 'pas')}</text>
+              {/* y: 0..100 % */}
               {[0, 0.5, 1].map((g) => (
                 <g key={g}>
                   <line x1={30} x2={CW - 40} y1={sy(g)} y2={sy(g)} stroke="rgba(148,163,184,0.15)" />
                   <text x={26} y={sy(g) + 3} fontSize={9} textAnchor="end" fill="#64748b">{Math.round(g * 100)}%</text>
                 </g>
               ))}
-              {keys.map((k) => (
-                <polyline key={k} points={path.map((p, i) => `${sx(i).toFixed(1)},${sy(p.c[k]).toFixed(1)}`).join(' ')} fill="none" stroke={COLORS[k]} strokeWidth={1.4} opacity={0.9} />
+              {/* x (bottom): time */}
+              {tTicks.map((t) => (
+                <g key={`t${t}`}>
+                  <line x1={sx(t)} x2={sx(t)} y1={bot} y2={bot + 3} stroke="#64748b" />
+                  <text x={sx(t)} y={bot + 12} fontSize={8.5} textAnchor="middle" fill="#94a3b8">{t}s</text>
+                </g>
               ))}
-              <polyline points={path.map((p, i) => `${sx(i).toFixed(1)},${sv(p.v).toFixed(1)}`).join(' ')} fill="none" stroke="#fff" strokeWidth={2.4} />
+              {keys.map((k) => (
+                <polyline key={k} points={path.map((p) => `${sx(p.t).toFixed(1)},${sy(p.c[k]).toFixed(1)}`).join(' ')} fill="none" stroke={COLORS[k]} strokeWidth={1.4} opacity={0.9} />
+              ))}
+              <polyline points={path.map((p) => `${sx(p.t).toFixed(1)},${sv(p.v).toFixed(1)}`).join(' ')} fill="none" stroke="#fff" strokeWidth={2.4} />
               <text x={CW - 36} y={sv(v1) + 3} fontSize={9} fill="#fff">{v1.toFixed(2)}</text>
               <text x={CW - 36} y={sv(v0) + 3} fontSize={9} fill="#94a3b8">{v0.toFixed(2)}</text>
             </svg>
