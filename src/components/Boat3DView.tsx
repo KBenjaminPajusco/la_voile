@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Anchor, Bot, ChevronLeft, ChevronRight, Eye, Gamepad2, Gauge, Hand, Maximize2, Minimize2, MoveDiagonal, ScanEye, Waves } from 'lucide-react';
 import type { ControlKey } from '../content/types';
 import { CONTROL_RATES } from '../sim/engine';
+import { VppPanel } from './VppPanel';
 import { bestVmgAngle, optimalControls } from '../sim/polar';
 import type { Snapshot } from '../sim/engine';
 import { HANDLE_DEFS, TrimmerScene, telltaleDrive, type CamView, type HandleId } from '../three/TrimmerScene';
@@ -199,6 +200,7 @@ export default function Boat3DView({
     const o = optimalControls(sn.tws, Math.abs(sn.twa), sn.plan.headsail);
     for (const k of HUD_CONTROLS) sim.setTarget(k, o[k], L('Stabilise (assist)', 'Stabiliser (assistance)'));
   };
+  const [vppOn, setVppOn] = useState(false);
   const stabiliseRef = useRef(stabilise);
   stabiliseRef.current = stabilise;
 
@@ -551,7 +553,7 @@ export default function Boat3DView({
             </button>
           )}
           {!mini && assist && getSim().setTarget && (
-            <button onClick={stabilise} title={L('Stabilise (P): every control to the optimum trim for this wind and angle. An assist: watch how the boat settles, then find it yourself.', 'Stabiliser (P) : chaque réglage à l’optimum pour ce vent et cet angle. Une aide : regardez le bateau se poser, puis retrouvez-le vous-même.')} className="flex items-center gap-1 rounded px-2 py-1 text-xs text-good hover:bg-good/15">
+            <button onClick={() => setVppOn((x) => !x)} title={L('Stabilise: the boat speed each setting gives at this wind and angle (a small VPP). P puts every control to the optimum at once.', 'Stabiliser : la vitesse que donne chaque réglage à ce vent et cet angle (un petit VPP). P met tous les réglages à l’optimum d’un coup.')} className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${vppOn ? 'bg-good/25 text-good' : 'text-good hover:bg-good/15'}`}>
               <Anchor size={12} /> {L('Stabilise', 'Stabiliser')}
             </button>
           )}
@@ -692,6 +694,19 @@ export default function Boat3DView({
               <span className="text-slate-100">{m.text}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Stabilise: speed per setting (small VPP) */}
+      {vppOn && getSim().setTarget && (
+        <div className="absolute inset-x-2 top-[84px] z-30 max-h-[calc(100%-96px)] overflow-y-auto">
+          <VppPanel
+            snap={snap}
+            sea={getSim().sea}
+            onSet={(k, v) => getSimRef.current().setTarget?.(k, v, L('Stabilise (VPP)', 'Stabiliser (VPP)'))}
+            onAll={stabilise}
+            onClose={() => setVppOn(false)}
+          />
         </div>
       )}
 
