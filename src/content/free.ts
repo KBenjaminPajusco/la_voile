@@ -19,9 +19,11 @@ export interface FreeOptions {
   start: 'good' | 'neutral' | 'bad';
   tactician: boolean;
   seed: number;
+  /** downwind kite: asymmetric on the sprit (J/80) or symmetric on a pole */
+  kite?: 'asym' | 'sym';
 }
 
-export const DEFAULT_FREE: FreeOptions = { tws: 12, gustiness: 0.5, shifts: 0.4, sea: 1, point: 'upwind', start: 'neutral', tactician: false, seed: 42 };
+export const DEFAULT_FREE: FreeOptions = { tws: 12, gustiness: 0.5, shifts: 0.4, sea: 1, point: 'upwind', start: 'neutral', tactician: false, seed: 42, kite: 'asym' };
 
 export function buildFree(o: FreeOptions): ScenarioDef {
   const rand = mulberry32(o.seed);
@@ -38,12 +40,14 @@ export function buildFree(o: FreeOptions): ScenarioDef {
   }
   const twa = o.point === 'upwind' ? 38 : o.point === 'reach' ? 95 : 140;
   const headsail = o.point === 'downwind' ? 'gennaker' : 'jib';
-  const opt = optimalControls(o.tws, twa, headsail);
+  const sym = o.kite === 'sym';
+  const opt = optimalControls(o.tws, twa, headsail === 'gennaker' && sym ? 'spinnaker' : headsail);
   let controls: Controls = opt;
   if (o.start === 'neutral') controls = { ...NEUTRAL_UPWIND, jibSheet: o.point === 'upwind' ? 0.8 : 0.45, mainSheet: o.point === 'upwind' ? 0.9 : 0.35, traveller: o.point === 'upwind' ? 0.6 : 0.5 };
+  if (o.start === 'neutral' && sym && headsail === 'gennaker') controls = { ...controls, jibLead: 0.5, jibHalyard: 0.4 }; // guy half way, pole mid height
   if (o.start === 'bad') controls = { ...opt, jibSheet: o.point === 'upwind' ? 1 : 0.2, mainSheet: 1, traveller: 0.8, backstay: o.tws > 14 ? 0 : 1, outhaul: 0, vang: 0, hike: 0.2, jibLead: 0.1 };
   return {
-    id: `free-${o.point}`,
+    id: `free-${o.point}${sym ? '-sym' : ''}`,
     mode: 'situation',
     title: L('Free practice', 'Entraînement libre'),
     subtitle: L(`${o.tws} kn · ${o.point} · sea ${o.sea} · gusts ${Math.round(o.gustiness * 100)}% · shifts ${Math.round(o.shifts * 100)}%`, `${o.tws} nds · ${POINT_FR[o.point]} · mer ${o.sea} · risées ${Math.round(o.gustiness * 100)}% · bascules ${Math.round(o.shifts * 100)}%`),
@@ -63,6 +67,7 @@ export function buildFree(o: FreeOptions): ScenarioDef {
       v: o.start === 'good' ? (o.point === 'upwind' ? 5 : 7) : 3,
       heel: 10,
       headsail,
+      kiteSym: sym,
       controls,
     }),
     script: [],

@@ -1,7 +1,7 @@
 // Target-speed and optimal-trim lookup built from the generated polar table.
 import type { Controls } from '../content/types';
 import { POLAR } from './polar.generated';
-import { clamp, DEG, type Headsail } from './physics';
+import { clamp, DEG, type PolarSail } from './physics';
 
 type Table = { twa: number[]; v: number[][]; c: number[][][] };
 
@@ -13,11 +13,12 @@ function idx(arr: number[], x: number) {
   return { i, t: clamp(t, 0, 1) };
 }
 
-function table(h: Headsail): Table {
+function table(h: PolarSail): Table {
+  if (h === 'spinnaker') return ((POLAR as any).spinnaker ?? POLAR.gennaker) as Table;
   return h === 'gennaker' ? POLAR.gennaker : POLAR.jib;
 }
 
-export function targetSpeed(tws: number, twa: number, h: Headsail = 'jib'): number {
+export function targetSpeed(tws: number, twa: number, h: PolarSail = 'jib'): number {
   const T = table(h);
   const a = idx(POLAR.tws, tws);
   const b = idx(T.twa, Math.abs(twa));
@@ -30,7 +31,7 @@ export function targetSpeed(tws: number, twa: number, h: Headsail = 'jib'): numb
   return v;
 }
 
-export function optimalControls(tws: number, twa: number, h: Headsail = 'jib'): Controls {
+export function optimalControls(tws: number, twa: number, h: PolarSail = 'jib'): Controls {
   const T = table(h);
   const a = idx(POLAR.tws, tws);
   const b = idx(T.twa, Math.abs(twa));
@@ -43,9 +44,9 @@ export function optimalControls(tws: number, twa: number, h: Headsail = 'jib'): 
 }
 
 /** Best VMG angle upwind (jib) or downwind (gennaker) for a wind speed. */
-export function bestVmgAngle(tws: number, upwind: boolean): { twa: number; v: number; vmg: number } {
+export function bestVmgAngle(tws: number, upwind: boolean, kite: PolarSail = 'gennaker'): { twa: number; v: number; vmg: number } {
   let best = { twa: upwind ? 42 : 140, v: 0, vmg: -1 };
-  const h: Headsail = upwind ? 'jib' : 'gennaker';
+  const h: PolarSail = upwind ? 'jib' : kite;
   const range = upwind ? [34, 55] : [118, 170];
   for (let twa = range[0]; twa <= range[1]; twa += 1) {
     const v = targetSpeed(tws, twa, h);

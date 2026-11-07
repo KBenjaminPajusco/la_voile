@@ -14,6 +14,7 @@ import type { SectionResult } from '../sim/physics';
 import { WaterFX } from './boat3d/water-fx.js';
 import { loadJ80 } from './j80Mesh';
 import { KiteMold } from './kiteMold';
+import { SymKite } from './symKite';
 import { L } from '../i18n';
 import { buildWaves, type Wave } from './boat3d/sea-state.js';
 import {
@@ -162,6 +163,10 @@ export class TrimmerScene {
   private staticRig = new THREE.Group();
   private disposed = false;
   private kiteMold: KiteMold | null = null;
+  /** the symmetric spinnaker (option): parametric, on a pole */
+  private symKite: SymKite;
+  private pole: THREE.Mesh;
+  private guy: THREE.Mesh;
   private waves: Wave[] = [];
   private waveKey = '';
   private waveTws = 0;
@@ -393,6 +398,14 @@ export class TrimmerScene {
     this.jib.mesh.name = 'jib';
     this.main.mesh.name = 'main';
     this.kite.mesh.name = 'kite';
+    const st = sailTextures({ base: '#b91c1c', stripes: [0.33, 0.66], seams: 14, panels: ['#f8fafc', '#b91c1c', '#1e3a8a', '#f8fafc', '#b91c1c', '#1e3a8a'] });
+    this.symKite = new SymKite(new THREE.MeshStandardMaterial({ map: st.map, alphaMap: st.alpha, transparent: true, opacity: 0.92, side: THREE.DoubleSide, depthWrite: false, roughness: 0.6 }));
+    this.symKite.mesh.name = 'kite';
+    this.symKite.mesh.visible = false;
+    this.pole = rod(0.03, blackMetal);
+    this.guy = rod(0.008, new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.8 }));
+    this.pole.visible = this.guy.visible = false;
+    this.boat.add(this.symKite.mesh, this.pole, this.guy);
     this.boat.add(this.jib.mesh, this.main.mesh, this.kite.mesh);
 
     // ---- telltales: red = port face, green = starboard face (the real-world convention)
@@ -756,7 +769,38 @@ export class TrimmerScene {
         return w;
       },
     };
-    if (this.kiteMold) {
+    const symUp = kiteUp && !!s.plan.kiteSym;
+    this.symKite.mesh.visible = symUp;
+    this.pole.visible = this.guy.visible = symUp;
+    if (symUp) {
+      // the pole: from the mast to windward, angle set by the guy, height by the pole height
+      const phi = (8 + s.controls.jibLead * 82) * DEG;
+      const ph = s.controls.jibHalyard;
+      const inner = new THREE.Vector3(0.14, DECK + 0.9 + 0.9 * ph, W * 0.06);
+      const pass = s.plan.polePass;
+      const L = pass ? 1.4 : 3.0; // gybing the pole: it is off one guy, not yet on the other
+      const tack = inner.clone().add(new THREE.Vector3(Math.cos(phi) * L, -0.1 + 1.1 * ph - 0.9 * ph * 0.5, W * Math.sin(phi) * L));
+      placeRod(this.pole, inner, tack);
+      // the clew to leeward: eased it flies forward and out, trimmed it comes aft
+      const a = (-20 + (1 - s.controls.jibSheet) * 70) * DEG;
+      const clewP = tack.clone().add(new THREE.Vector3(Math.sin(a) * 5.4, 0.25, Ls * Math.cos(a) * 5.4));
+      this.symKite.deform({
+        tack,
+        head: kHead,
+        clew: clewP,
+        side: Ls,
+        depth: collapsed ? 0.06 : 0.26,
+        curl: Math.min(1.5, s.kiteCurl ?? 0),
+        swing: s.kiteSwing ?? 0,
+        collapse: collapsed ? 1 : 0,
+        time: t,
+      });
+      placeRod(this.guy, tack, new THREE.Vector3(-4.6, sheerAt(-4.6) + 0.05, W * 1.0));
+      const sk = this.symKite;
+      kiteState.point = (h, tt, o) => sk.sample(h, tt, o);
+      if (this.kiteMold) this.kiteMold.mesh.visible = false;
+      this.kite.mesh.visible = false;
+    } else if (this.kiteMold) {
       const midA = gs ? interpSection(gs, 0.5).a : 5;
       this.kiteMold.mesh.visible = kiteUp;
       if (kiteUp)
@@ -776,7 +820,7 @@ export class TrimmerScene {
       kiteState.point = (h, tt, o) => mold.sample(h, tt, o);
       this.kite.mesh.visible = false;
     } else this.kite.update(kiteState);
-    this.sprit.visible = kiteUp;
+    this.sprit.visible = kiteUp && !symUp;
 
     // forestay follows the jib luff sag
     {

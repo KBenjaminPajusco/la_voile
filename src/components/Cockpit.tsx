@@ -232,6 +232,7 @@ export function Cockpit({
   const hud = runnerRef.current.hud();
   const msgs = snap.messages.slice(-7).reverse();
   const isKite = snap.plan.headsail === 'gennaker';
+  const sym = isKite && !!snap.plan.kiteSym;
   const focus = new Set(def.focusControls);
   const perfTone = snap.perf > 0.95 ? 'good' : snap.perf > 0.85 ? 'warn' : 'alarm';
   const set = (k: ControlKey) => (v: number) => sim.setTarget(k, v);
@@ -618,7 +619,7 @@ export function Cockpit({
   const jibStation = (
     <>
           <div className="mb-2 flex flex-wrap items-center justify-between gap-1">
-            <div className="panel-title">{isKite ? L('Gennaker — your station', 'Spi — votre poste') : L('Jib — your station', 'Foc — votre poste')}</div>
+            <div className="panel-title">{isKite ? (sym ? L('Spinnaker — your station', 'Spi symétrique — votre poste') : L('Gennaker — your station', 'Spi — votre poste')) : L('Jib — your station', 'Foc — votre poste')}</div>
             {isKite ? (
               <span className="text-[10px] text-slate-400">{L('Sheet in hand — no winch', 'Écoute à la main — pas de winch')}</span>
             ) : (
@@ -656,8 +657,8 @@ export function Cockpit({
               </button>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <ControlSlider compact={slim} label={L('Jib lead', 'Chariot de foc')} actual={snap.controls.jibLead} target={snap.targets.jibLead} onChange={set('jibLead')} keys={['[', ']']} leftLabel={L('fwd', 'avant')} rightLabel={L('aft', 'arrière')} highlight={focus.has('jibLead')} disabled={isKite} />
-              <ControlSlider compact={slim} label={L('Jib halyard', 'Drisse de foc')} actual={snap.controls.jibHalyard} target={snap.targets.jibHalyard} onChange={set('jibHalyard')} keys={['N', 'M']} leftLabel={L('soft', 'mou')} rightLabel={L('tight', 'tendu')} highlight={focus.has('jibHalyard')} disabled={isKite} />
+              <ControlSlider compact={slim} label={sym ? L('Guy (pole)', 'Bras (tangon)') : L('Jib lead', 'Chariot de foc')} actual={snap.controls.jibLead} target={snap.targets.jibLead} onChange={set('jibLead')} keys={['[', ']']} leftLabel={sym ? L('forestay', 'étai') : L('fwd', 'avant')} rightLabel={sym ? L('square', 'carré') : L('aft', 'arrière')} highlight={focus.has('jibLead')} disabled={isKite && !sym} note={sym && snap.plan.polePass ? L('Pole being gybed…', 'Tangon en cours d’empannage…') : undefined} />
+              <ControlSlider compact={slim} label={sym ? L('Pole height', 'Hauteur tangon') : L('Jib halyard', 'Drisse de foc')} actual={snap.controls.jibHalyard} target={snap.targets.jibHalyard} onChange={set('jibHalyard')} keys={['N', 'M']} leftLabel={sym ? L('low', 'bas') : L('soft', 'mou')} rightLabel={sym ? L('high', 'haut') : L('tight', 'tendu')} highlight={focus.has('jibHalyard')} disabled={isKite && !sym} />
             </div>
           </div>
     </>

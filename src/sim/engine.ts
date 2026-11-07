@@ -9,6 +9,7 @@ import {
   evaluate,
   KN,
   NEUTRAL_UPWIND,
+  polarSail,
   type ForceResult,
   type Headsail,
   type SailPlanState,
@@ -106,6 +107,8 @@ export interface SimConfig {
   crewFore?: CrewFore;
   energy?: number;
   gear?: Gear;
+  /** downwind with a symmetric spinnaker on a pole (instead of the asymmetric on the sprit) */
+  kiteSym?: boolean;
   /** Helm auto-feathers in gusts (good helm). Default true. */
   helmFeathers?: boolean;
 }
@@ -224,6 +227,7 @@ export class Simulator {
   windT = 0;
   /** kite swing under gravity (rad, + to leeward), with a pendulum lag */
   kiteSwing = 0;
+  private polePassUntil = 0;
   /** roll tacks / gybes: the crew stays hiked on the old side through head to wind, then crosses hard
    *  and flattens the boat - the rig sweeps to windward and pumps the sails */
   rollMode = false;
@@ -302,6 +306,7 @@ export class Simulator {
     this.gear = cfg.gear ?? 'high';
     this.plan = {
       headsail: cfg.headsail ?? 'jib',
+      kiteSym: !!cfg.kiteSym,
       gennakerCollapsed: false,
       jibReleased: false,
       jibBacked: false,
@@ -323,7 +328,7 @@ export class Simulator {
   }
   /** Target speed uses a smoothed wind (a boat cannot accelerate instantly into a gust). */
   target() {
-    return Math.max(0.3, targetSpeed(this.twsSmooth, Math.abs(this.twa), this.plan.headsail) * (1 - 0.035 * this.sea));
+    return Math.max(0.3, targetSpeed(this.twsSmooth, Math.abs(this.twa), polarSail(this.plan)) * (1 - 0.035 * this.sea));
   }
 
   say(from: Speaker, text: string, tone: SimMessage['tone'] = 'info', key?: string, cooldown = 6) {
@@ -565,7 +570,7 @@ export class Simulator {
   }
 
   helmTargetFor(upwind: boolean, mode: HelmMode, base?: number) {
-    const best = base ?? bestVmgAngle(this.tws, upwind).twa;
+    const best = base ?? bestVmgAngle(this.tws, upwind, this.plan.kiteSym ? 'spinnaker' : 'gennaker').twa;
     if (upwind) {
       const off: Record<HelmMode, number> = { point: -2.5, normal: 0, foot: 3.5, accel: 7 };
       return best + off[mode];
@@ -606,6 +611,10 @@ export class Simulator {
 
     this.updateHelm(dt);
     this.updateCrewSide();
+    if (this.plan.polePass && this.t >= this.polePassUntil) {
+      this.plan.polePass = false;
+      this.say('pit', L('Pole on — guy is yours!', 'Tangon en place — le bras est à toi !'), 'info', 'pole', 3);
+    }
     this.updateHeadsailState(dt);
     if (this.autoTrim) this.updateAutoCrew(dt);
     this.updateControls(dt);
@@ -616,7 +625,7 @@ export class Simulator {
     // and the luff curls back on itself; way past it, the kite collapses. That is how a kite is
     // trimmed: ease until it curls, trim back in a touch.
     if (this.plan.headsail === 'gennaker') {
-      const opt = optimalControls(this.tws, Math.abs(twaS), 'gennaker').jibSheet;
+      const opt = optimalControls(this.tws, Math.abs(twaS), polarSail(this.plan)).jibSheet;
       const luffPoint = opt - 0.03;
       this.kiteOptSheet = opt;
       // gravity: ~3 kg of cloth hanging off the luff. With the boat heeled it swings to the low side,
@@ -631,7 +640,7 @@ export class Simulator {
       }
       const effSheet = this.controls.jibSheet - 0.35 * this.kiteSwing;
       this.plan.kiteCurl = this.plan.gennakerCollapsed ? 1.5 : clamp((luffPoint - effSheet) / 0.1, 0, 1.5);
-      const optMain = optimalControls(this.tws, Math.abs(twaS), 'gennaker').mainSheet;
+      const optMain = optimalControls(this.tws, Math.abs(twaS), polarSail(this.plan)).mainSheet;
       // main too eased: the kite's exit flow no longer runs along the main's leeward side (the slot
       // works like jib/main): first the kite leech flutters, eased further the luff breathes too
       this.plan.kiteLeechFlap = clamp((optMain - this.controls.mainSheet - 0.03) / 0.12, 0, 1);
@@ -662,7 +671,7 @@ export class Simulator {
       // Downwind the sails are meant to be partly stalled, so damping comes from how the rig is
       // held: a main eased too far with the vang off twists its head forward and drives a roll
       // to windward; an under-sheeted kite flaps and swings. Sheeting both on a bit settles it.
-      const opt = optimalControls(this.twsSmooth, Math.abs(twaS), this.plan.headsail);
+      const opt = optimalControls(this.twsSmooth, Math.abs(twaS), polarSail(this.plan));
       const mainLoose = clamp((opt.mainSheet - this.controls.mainSheet - 0.05) / 0.2, 0, 1) * (1 - 0.6 * this.controls.vang);
       const kiteLoose = kiteUp ? clamp((opt.jibSheet - this.controls.jibSheet - 0.04) / 0.12, 0, 1) : 0;
       const collapse = this.plan.gennakerCollapsed ? 0.6 : 0;
@@ -821,6 +830,12 @@ export class Simulator {
       }
       if (m.kind === 'gybe' && m.crossedAt === undefined && Math.sign(nt) === Math.sign(m.targetTwa)) {
         m.crossedAt = this.t;
+        if (this.plan.headsail === 'gennaker' && this.plan.kiteSym) {
+          // symmetric kite: the pole comes off the old guy and goes onto the new one, end for end
+          this.plan.polePass = true;
+          this.polePassUntil = this.t + 3.5;
+          this.say('pit', L('Pole off — gybing the pole!', 'Tangon décroché — on empanne le tangon !'), 'info', 'pole', 3);
+        }
         this.say('helm', L('Boom coming across!', 'La bôme passe !'), 'warn', 'boom', 2);
         this.heelRate += 6 * Math.sign(nt);
       }
@@ -987,7 +1002,7 @@ export class Simulator {
     this.autoClock += dt;
     if (this.autoClock < 0.25) return;
     this.autoClock = 0;
-    const o = optimalControls(this.tws, twaAbs, this.plan.headsail);
+    const o = optimalControls(this.tws, twaAbs, polarSail(this.plan));
     for (const k of Object.keys(o) as ControlKey[]) {
       if (!this.autoKeys.has(k)) continue;
       if (k === 'hike' && this.crewPlan) continue; // in a tack / gybe the crew weight follows the roll

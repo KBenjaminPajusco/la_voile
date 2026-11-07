@@ -4,7 +4,7 @@
 import { L } from '../i18n';
 import type { ControlKey, Controls } from '../content/types';
 import { J80_PROFILE } from './boatProfile';
-import { clamp, steadyState, type ForceResult, type SailPlanState, type SectionResult, type SteadyResult } from './physics';
+import { clamp, steadyState, type ForceResult, type SailPlanState, type SectionResult, type SteadyResult, polarSail } from './physics';
 import { optimalControls, targetSpeed } from './polar';
 
 
@@ -97,8 +97,23 @@ const KITE_WHY: [string, string] = [
   L('The luff is rolling back: trim until it holds, just at the edge of the curl.', "Le guindant s'enroule : borde jusqu'à ce qu'il tienne, juste à la limite de la frisure."),
 ];
 
-export const actText = (k: ControlKey, more: boolean, kite = false) => (kite && k === 'jibSheet' ? KITE_ACT : ACT[k])[more ? 1 : 0];
-export const whyText = (k: ControlKey, more: boolean, kite = false) => (kite && k === 'jibSheet' ? KITE_WHY : WHY[k])[more ? 1 : 0];
+// under a kite the jib car / halyard sliders only mean something for the symmetric spinnaker: guy and pole height
+const SYM_ACT: Partial<Record<ControlKey, [string, string]>> = {
+  jibLead: [L('Ease the guy (pole forward)', 'Choque le bras (tangon vers l’avant)'), L('Square the pole (guy on)', 'Brasse le tangon (borde le bras)')],
+  jibHalyard: [L('Lower the pole', 'Descends le tangon'), L('Raise the pole', 'Monte le tangon')],
+};
+const SYM_WHY: Partial<Record<ControlKey, [string, string]>> = {
+  jibLead: [
+    L('the pole goes forward with the apparent wind: keep it at right angles to it', 'le tangon avance avec le vent apparent : garde-le à angle droit avec lui'),
+    L('squared, the kite swings out to windward of the main and shows more cloth to the wind (deep)', 'brassé, le spi sort au vent de la GV et présente plus de toile au vent (au portant profond)'),
+  ],
+  jibHalyard: [
+    L('lower, the luff tightens - the clews should be level (lower in light air)', 'plus bas, le guindant se tend - les points d’écoute doivent être à la même hauteur (plus bas dans le petit temps)'),
+    L('higher, the luff opens and the kite lifts - clews level (higher as the breeze builds)', 'plus haut, le guindant s’ouvre et le spi monte - points d’écoute à la même hauteur (plus haut quand le vent monte)'),
+  ],
+};
+export const actText = (k: ControlKey, more: boolean, kite = false) => (kite && k === 'jibSheet' ? KITE_ACT : kite && SYM_ACT[k] ? SYM_ACT[k]! : ACT[k])[more ? 1 : 0];
+export const whyText = (k: ControlKey, more: boolean, kite = false) => (kite && k === 'jibSheet' ? KITE_WHY : kite && SYM_WHY[k] ? SYM_WHY[k]! : WHY[k])[more ? 1 : 0];
 export const howText = (k: ControlKey, more: boolean) => {
   const [a, b, h] = HOW[k];
   return L(`key ${more ? b : a}, or drag ${h} in 3D`, `touche ${more ? b : a}, ou glisse ${h} en 3D`);
@@ -139,13 +154,13 @@ export function solve(c: Controls, tws: number, twa: number, plan: SailPlanState
   let kiteCurl = 0;
   let kiteOver = 0;
   if (kite) {
-    const opt = optimalControls(tws, Math.abs(twa), 'gennaker').jibSheet;
+    const opt = optimalControls(tws, Math.abs(twa), polarSail(plan)).jibSheet;
     kiteCurl = clamp((opt - 0.03 - c.jibSheet) / 0.1, 0, 1.5);
     kiteOver = clamp((c.jibSheet - opt - 0.06) / 0.1, 0, 1);
     p = { ...plan, kiteCurl, kiteOver } as SailPlanState;
   }
   const r: SteadyResult = steadyState(J80_PROFILE, c, { tws, twa: Math.abs(twa), sea }, p);
-  const target = targetSpeed(tws, Math.abs(twa), plan.headsail);
+  const target = targetSpeed(tws, Math.abs(twa), polarSail(plan));
   return { v: r.v, target, perf: r.v / target, heel: r.heel, rudder: r.f.rudder, f: r.f, kiteCurl, kiteOver };
 }
 
@@ -203,8 +218,8 @@ export function advise(inp: AdviceInput): Advice {
   const kite = inp.plan.headsail === 'gennaker';
   const tws = inp.upcoming && inp.upcoming.tws > inp.tws + 2 ? inp.upcoming.tws : inp.tws;
   const now = solve(inp.controls, tws, inp.twa, inp.plan, inp.sea);
-  const opt = inp.opt ?? optimalControls(tws, Math.abs(inp.twa), inp.plan.headsail);
-  const keys = (inp.keys ?? (Object.keys(opt) as ControlKey[])).filter((k) => !(kite && (k === 'jibLead' || k === 'jibHalyard')));
+  const opt = inp.opt ?? optimalControls(tws, Math.abs(inp.twa), polarSail(inp.plan));
+  const keys = (inp.keys ?? (Object.keys(opt) as ControlKey[])).filter((k) => !(kite && !inp.plan.kiteSym && (k === 'jibLead' || k === 'jibHalyard')));
   const m0 = merit(now);
   let best: { k: ControlKey; v: number; gain: number; r: BoatReading } | null = null;
   for (const k of keys) {
@@ -293,7 +308,7 @@ const mainOnCache = new Map<string, Controls>();
 /** Optimal trim with the mainsheet held at 90 % (boom near the centreline, out of the trimmer's face) and the
  *  traveller re-optimised to compensate: same speed upwind, used where the lesson / question is about the jib. */
 export function mainOnControls(tws: number, twa: number, plan: SailPlanState, sea = 0): Controls {
-  const opt = optimalControls(tws, Math.abs(twa), plan.headsail);
+  const opt = optimalControls(tws, Math.abs(twa), polarSail(plan));
   if (plan.headsail !== 'jib' || Math.abs(twa) > 70 || opt.mainSheet >= 0.9) return opt;
   const key = `${tws.toFixed(1)}|${Math.abs(twa).toFixed(0)}|${sea}`;
   const hit = mainOnCache.get(key);

@@ -9,9 +9,11 @@ import { CONTROL_RATES } from '../sim/engine';
 import { solve } from '../sim/advisor';
 import { optimalControls } from '../sim/polar';
 import { L } from '../i18n';
+import { polarSail } from '../sim/physics';
 
 const KEYS_JIB: ControlKey[] = ['jibSheet', 'jibLead', 'jibHalyard', 'mainSheet', 'traveller', 'vang', 'outhaul', 'cunningham', 'backstay', 'hike'];
 const KEYS_KITE: ControlKey[] = ['jibSheet', 'mainSheet', 'traveller', 'vang', 'outhaul', 'backstay', 'hike'];
+const KEYS_SYM: ControlKey[] = ['jibSheet', 'jibLead', 'jibHalyard', 'mainSheet', 'traveller', 'vang', 'outhaul', 'backstay', 'hike'];
 const N = 24;
 
 interface Curve {
@@ -27,12 +29,12 @@ interface Curve {
 
 function sweep(snap: Snapshot, sea: number): { curves: Curve[]; target: number } {
   const kite = snap.plan.headsail === 'gennaker';
-  const keys = kite ? KEYS_KITE : KEYS_JIB;
+  const keys = kite ? (snap.plan.kiteSym ? KEYS_SYM : KEYS_KITE) : KEYS_JIB;
   const c0: Controls = { ...snap.targets };
   const tws = snap.tws;
   const twa = snap.twa;
   const plan = snap.plan;
-  const opt = optimalControls(tws, Math.abs(twa), plan.headsail);
+  const opt = optimalControls(tws, Math.abs(twa), polarSail(plan));
   const base = solve(c0, tws, twa, plan, sea);
   const curves = keys.map((k) => {
     const xs: number[] = [];
@@ -80,7 +82,7 @@ export function VppPanel({ snap, sea, onSet, onAll, onClose }: { snap: Snapshot;
   // reached by a continuous path from where you started. A boat too badly trimmed to have any slope
   // (stopped) first walks towards the polar optimum, still 2 points at a time.
   // The boat follows for real; the path is kept for the curves (and the CSV).
-  const keysFor = (k: boolean) => (k ? KEYS_KITE : KEYS_JIB);
+  const keysFor = (k: boolean) => (k ? (snap.plan.kiteSym ? KEYS_SYM : KEYS_KITE) : KEYS_JIB);
   const [running, setRunning] = useState(false);
   const [path, setPath] = useState<PathPoint[]>([]);
   const [done, setDone] = useState(false);
@@ -118,7 +120,7 @@ export function VppPanel({ snap, sea, onSet, onAll, onClose }: { snap: Snapshot;
       }
       if (!moved && v0 / Math.max(0.1, solve(r.c, r.tws, r.twa, plan, sea).target) < 0.6) {
         // no slope anywhere (boat stopped): walk towards the polar optimum
-        const o = optimalControls(r.tws, Math.abs(r.twa), plan.headsail);
+        const o = optimalControls(r.tws, Math.abs(r.twa), polarSail(plan));
         for (const k of keys) next[k] = r.c[k] + Math.sign(o[k] - r.c[k]) * Math.min(Math.abs(o[k] - r.c[k]), 0.02);
       }
       const v1 = v(next);
@@ -158,7 +160,8 @@ export function VppPanel({ snap, sea, onSet, onAll, onClose }: { snap: Snapshot;
   const H = 54;
   const PX = (x: number) => 4 + x * (W - 8);
   const PY = (v: number) => 4 + (1 - (Math.max(lo, v) - lo) / Math.max(0.05, vMax - lo)) * (H - 8);
-  const label = (k: ControlKey) => (kite && k === 'jibSheet' ? L('Kite sheet', 'Écoute de spi') : CONTROL_RATES[k].label);
+  const label = (k: ControlKey) =>
+    kite && k === 'jibSheet' ? L('Kite sheet', 'Écoute de spi') : kite && snap.plan.kiteSym && k === 'jibLead' ? L('Guy (pole)', 'Bras (tangon)') : kite && snap.plan.kiteSym && k === 'jibHalyard' ? L('Pole height', 'Hauteur tangon') : CONTROL_RATES[k].label;
 
   // two views in the same layout: "speed per setting" (the VPP curves), and once an optimisation has
   // run, "setting vs time" for each control (zoomed on its own range). Clear goes back to the VPP.

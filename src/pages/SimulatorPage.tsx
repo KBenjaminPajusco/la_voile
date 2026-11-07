@@ -94,6 +94,10 @@ export function SimulatorPage({ nav, sub }: { nav: Nav; sub?: string }) {
               <Seg k="point" options={[{ v: 'upwind', l: L('Upwind', 'Au près') }, { v: 'reach', l: L('Beam reach (jib)', 'Travers (foc)') }, { v: 'downwind', l: L('Downwind (gennaker)', 'Au portant (gennaker)') }]} />
             </div>
             <div>
+              <div className="mb-1 text-xs text-slate-300">{L('Downwind kite (hoisted downwind or after a bear-away)', 'Spi (au portant ou après une abattée)')}</div>
+              <Seg k="kite" options={[{ v: 'asym', l: L('Asymmetric (J/80, sprit)', 'Asymétrique (J/80, bout-dehors)') }, { v: 'sym', l: L('Symmetric (pole)', 'Symétrique (tangon)') }]} />
+            </div>
+            <div>
               <div className="mb-1 text-xs text-slate-300">{L('Starting trim', 'Réglage de départ')}</div>
               <Seg k="start" options={[{ v: 'good', l: L('Near-optimal', 'Quasi optimal') }, { v: 'neutral', l: L('Generic', 'Générique') }, { v: 'bad', l: L('Messed up — fix it', 'Déréglé — à corriger') }]} />
             </div>

@@ -1,6 +1,6 @@
 // Reusable evaluation criteria for scenario content.
 import type { ActionLog } from '../sim/engine';
-import { clamp } from '../sim/physics';
+import { clamp, polarSail } from '../sim/physics';
 import { optimalControls } from '../sim/polar';
 import type { Criterion, EvalCtx } from '../sim/runner';
 import { mean, reactionScore, scoreLinear, window } from '../sim/scoring';
@@ -158,7 +158,7 @@ export function finalControlCriterion(
     weight: w,
     evaluate: ({ sim }) => {
       const tolerance = tol + 0.015;
-      const opt = optimalControls(sim.twsSmooth, Math.abs(sim.twa), sim.plan.headsail)[key] + bias;
+      const opt = optimalControls(sim.twsSmooth, Math.abs(sim.twa), polarSail(sim.plan))[key] + bias;
       const d = sim.controls[key] - opt;
       const s = clamp(100 - (Math.max(0, Math.abs(d) - tolerance) / 0.2) * 100, 0, 100);
       const word = Math.abs(d) <= tolerance ? L('in the window', 'dans la plage') : d > 0 ? L('too much', 'trop') : L('too little', 'pas assez');

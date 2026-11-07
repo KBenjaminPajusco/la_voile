@@ -17,6 +17,11 @@ export const clamp = (x: number, a: number, b: number) => (x < a ? a : x > b ? b
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 export type Headsail = 'jib' | 'gennaker';
+/** which polar table: the symmetric spinnaker is a 'gennaker' (kite) with its own pole controls */
+export type PolarSail = Headsail | 'spinnaker';
+export function polarSail(plan: { headsail: Headsail; kiteSym?: boolean }): PolarSail {
+  return plan.headsail === 'gennaker' && plan.kiteSym ? 'spinnaker' : plan.headsail;
+}
 export type Flow = 'flog' | 'luff' | 'ok' | 'stall';
 
 export interface SailShape {
@@ -115,6 +120,11 @@ export interface ForceResult {
 
 export interface SailPlanState {
   headsail: Headsail;
+  /** the kite is a SYMMETRIC spinnaker on a pole: under it the jib lead slider is the guy (pole
+   *  angle, forestay -> square) and the jib halyard slider the pole height */
+  kiteSym?: boolean;
+  /** symmetric kite, pole being gybed (end for end): the kite flies on its sheets only */
+  polePass?: boolean;
   gennakerCollapsed: boolean;
   jibReleased: boolean; // flogging (during a tack)
   jibBacked: boolean; // sheeted on the wrong side
@@ -149,7 +159,9 @@ function grooveWidth(depth: number, draft: number) {
 }
 
 /** Compute sail geometry from the controls. Pure function of controls + apparent wind speed. */
-export function computeShapes(c: Controls, awsKn: number): ShapeSet {
+const gennakerUpEarly = (plan: SailPlanState) => plan.headsail === 'gennaker';
+
+export function computeShapes(c: Controls, awsKn: number, kiteSym = false): ShapeSet {
   // ---- forestay sag: backstay (and mainsheet leech load on a fractional rig) tension the forestay
   const windLoad = clamp(awsKn / 16, 0.15, 1.4);
   const forestaySag = clamp((1 - 0.72 * c.backstay - 0.18 * c.mainSheet * c.mainSheet) * windLoad * 0.85, 0, 1.25);
@@ -207,15 +219,18 @@ export function computeShapes(c: Controls, awsKn: number): ShapeSet {
     groove: grooveWidth(mainDepth, mainDraft),
   };
 
-  // ---- gennaker (headsail sheet drives it when hoisted)
-  const gAngle = 16 + Math.pow(1 - c.jibSheet, 1.05) * 88;
+  // ---- gennaker (headsail sheet drives it when hoisted). A symmetric spinnaker hangs between the
+  // pole end and the clew: squaring the pole (guy) swings the whole sail out to windward of the
+  // forestay, the sheet then sets its angle of attack
+  const poleAngle = 8 + c.jibLead * 82; // deg from the forestay (8) to square (90)
+  const gAngle = kiteSym ? 14 + Math.pow(1 - c.jibSheet, 1.05) * 80 + (poleAngle - 45) * 0.85 : 16 + Math.pow(1 - c.jibSheet, 1.05) * 88;
   const gennaker: SailShape = {
     angle: gAngle,
-    twist: 10 + (1 - c.jibSheet) * 10,
-    depth: 0.2,
-    depthBottom: 0.19,
-    depthTop: 0.2,
-    draft: 0.45,
+    twist: kiteSym ? 8 + (1 - c.jibSheet) * 8 : 10 + (1 - c.jibSheet) * 10,
+    depth: kiteSym ? 0.24 : 0.2,
+    depthBottom: kiteSym ? 0.22 : 0.19,
+    depthTop: kiteSym ? 0.23 : 0.2,
+    draft: kiteSym ? 0.5 : 0.45,
     leech: c.jibSheet,
     entry: entryAngle(0.2, 0.45),
     groove: 12,
@@ -437,7 +452,7 @@ export function evaluate(
 ): ForceResult {
   const v = Math.max(0, st.v);
   const deckAw = apparentAt(env.tws, env.twa, v, st.heel, 4);
-  const shapes = computeShapes(c, deckAw.aws);
+  const shapes = computeShapes(c, deckAw.aws, gennakerUpEarly(plan) && !!plan.kiteSym);
   const gennakerUp = plan.headsail === 'gennaker';
   // LIGHT AIR: below ~7 kn there is not enough pressure to hold the cloth's shape. Upright, the
   // sails sag and the flow will not stay on; heeled a few degrees (crew to leeward) gravity lets
@@ -522,18 +537,32 @@ export function evaluate(
   }
 
   let gennaker: SailResult | null = null;
+  let symFactor = 1;
+  let symArea = 1;
+  if (gennakerUp && plan.kiteSym) {
+    const awaAbs = Math.abs(deckAw.awa);
+    const pole = 8 + c.jibLead * 82;
+    const poleIdeal = clamp(awaAbs - 92, 6, 88); // pole at right angles to the apparent wind
+    const poleEff = 1 - 0.3 * Math.min(1.6, ((pole - poleIdeal) / 32) ** 2);
+    const hIdeal = clamp(0.3 + (deckAw.aws - 6) / 22, 0.25, 0.75); // clews level: higher as the breeze builds
+    const heightEff = 1 - 0.16 * Math.min(1.6, ((c.jibHalyard - hIdeal) / 0.3) ** 2);
+    // a symmetric kite is a big round bag: superb deep, poor on a reach
+    // projected area: it counts for the drag too (deep, a stalled kite is pushed by its drag)
+    symArea = clamp(0.72 + 0.5 * ((awaAbs - 70) / 80), 0.7, 1.24) * (0.75 + 0.25 * poleEff);
+    symFactor = poleEff * heightEff * (plan.polePass ? 0.6 : 1);
+  }
   if (gennakerUp) {
     gennaker = computeSail({
       shape: shapes.gennaker,
       sections: GEN_SECTIONS,
-      area: p.gennakerArea,
+      area: p.gennakerArea * symArea,
       zBase: 0.4,
       span: p.mastHeight * 0.92,
       ceX: p.gennakerCEx,
       aspect: 3.2,
       alphaShift: () => 0,
       // a curl past the trimmer's lip folds the front of the kite back on itself: lost area and drag
-      efficiencyFactor: (1 - 0.5 * (1 - lightShape)) * (plan.gennakerCollapsed ? 0.15 : 1) * (1 - 0.45 * clamp(((plan.kiteCurl ?? 0) - 0.25) / 0.75, 0, 1)) * (1 - 0.08 * (plan.kiteLeechFlap ?? 0)) * (1 - 0.08 * (plan.kiteLuffFlap ?? 0)),
+      efficiencyFactor: symFactor * (1 - 0.5 * (1 - lightShape)) * (plan.gennakerCollapsed ? 0.15 : 1) * (1 - 0.45 * clamp(((plan.kiteCurl ?? 0) - 0.25) / 0.75, 0, 1)) * (1 - 0.08 * (plan.kiteLeechFlap ?? 0)) * (1 - 0.08 * (plan.kiteLuffFlap ?? 0)),
       extraCd: (plan.gennakerCollapsed ? 0.15 : 0) + 0.05 * clamp((plan.kiteCurl ?? 0) - 0.25, 0, 1),
       env,
       st: { v, heel: st.heel },
@@ -771,7 +800,7 @@ export function optimiseTrim(
       bestJ = j;
     }
   }
-  const keys = CONTROL_KEYS.filter((k) => !(plan.headsail === 'gennaker' && (k === 'jibLead' || k === 'jibHalyard')));
+  const keys = CONTROL_KEYS.filter((k) => !(plan.headsail === 'gennaker' && !plan.kiteSym && (k === 'jibLead' || k === 'jibHalyard')));
   for (const step of [0.16, 0.08, 0.04, 0.02]) {
     for (let pass = 0; pass < 2; pass++) {
       let improved = false;

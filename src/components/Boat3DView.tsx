@@ -10,6 +10,7 @@ import { bestVmgAngle, optimalControls } from '../sim/polar';
 import type { Snapshot } from '../sim/engine';
 import { HANDLE_DEFS, TrimmerScene, telltaleDrive, type CamView, type HandleId } from '../three/TrimmerScene';
 import { L } from '../i18n';
+import { polarSail } from '../sim/physics';
 
 const VIEWS: { id: CamView; label: string }[] = [
   { id: 'trimmer', label: L('Trimmer', 'Régleur') },
@@ -197,7 +198,7 @@ export default function Boat3DView({
     const sim = getSimRef.current();
     if (!sim.setTarget) return;
     const sn = sim.snapshot();
-    const o = optimalControls(sn.tws, Math.abs(sn.twa), sn.plan.headsail);
+    const o = optimalControls(sn.tws, Math.abs(sn.twa), polarSail(sn.plan));
     for (const k of HUD_CONTROLS) sim.setTarget(k, o[k], L('Stabilise (assist)', 'Stabiliser (assistance)'));
   };
   const [vppOn, setVppOn] = useState(false);
@@ -320,7 +321,7 @@ export default function Boat3DView({
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
         const sn = sim.snapshot();
         holdRef.current = { id: sel, key, dir: e.button === 2 ? -1 : 1, value: sn.targets[key] };
-        sc.gauge = { id: sel, target: holdRef.current.value, opt: optimalControls(sn.tws, Math.abs(sn.twa), sn.plan.headsail)[key] };
+        sc.gauge = { id: sel, target: holdRef.current.value, opt: optimalControls(sn.tws, Math.abs(sn.twa), polarSail(sn.plan))[key] };
       }
       return; // no look-around drag in game mode: the mouse is the tiller
     }
@@ -336,7 +337,7 @@ export default function Boat3DView({
         grab.current = { id, key, value: v, sent: v, dir: 0 };
         sc.hoverHandle = id;
         const sn = sim.snapshot();
-        sc.gauge = { id, target: v, opt: optimalControls(sn.tws, Math.abs(sn.twa), sn.plan.headsail)[key] };
+        sc.gauge = { id, target: v, opt: optimalControls(sn.tws, Math.abs(sn.twa), polarSail(sn.plan))[key] };
         setHover({ id, x: n.px, y: n.py });
       }
     }
