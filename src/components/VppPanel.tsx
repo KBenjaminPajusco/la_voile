@@ -2,7 +2,7 @@
 // over its whole range (the other controls left where they are), with where you are, the top of the
 // curve and the polar's optimum. Click a curve to put that control there.
 import { useEffect, useRef, useState } from 'react';
-import { Anchor, Download, Play, Square, X } from 'lucide-react';
+import { Anchor, Download, Eraser, Play, Square, X } from 'lucide-react';
 import type { ControlKey, Controls } from '../content/types';
 import type { Snapshot } from '../sim/engine';
 import { CONTROL_RATES } from '../sim/engine';
@@ -151,7 +151,7 @@ export function VppPanel({ snap, sea, onSet, onAll, onClose }: { snap: Snapshot;
 
   const vMax = Math.max(...data.curves.flatMap((c) => c.vs), data.target);
   const vMin = Math.max(0, Math.min(...data.curves.flatMap((c) => c.vs)));
-  const lo = Math.max(vMin, vMax - Math.max(1.2, (vMax - vMin) * 0.6));
+  const lo = Math.min(Math.max(vMin, vMax - Math.max(1.2, (vMax - vMin) * 0.6)), ...(path.length > 1 ? path.map((p) => p.v - 0.05) : [Infinity]));
   const W = 150;
   const H = 54;
   const PX = (x: number) => 4 + x * (W - 8);
@@ -186,7 +186,7 @@ export function VppPanel({ snap, sea, onSet, onAll, onClose }: { snap: Snapshot;
           return (
             <div key={c.k} className="rounded border border-cyan-300/10 bg-navy-900/70 px-1.5 pb-1 pt-1">
               <div className="flex items-baseline justify-between gap-1 text-[10.5px]">
-                <span className="truncate font-semibold uppercase text-slate-300">{label(c.k)}</span>
+                <span className="truncate font-semibold uppercase text-slate-300" style={path.length > 1 ? { color: COLORS[c.k] } : undefined}>{label(c.k)}</span>
                 <span className="num shrink-0 text-white">{Math.round(c.cur * 100)}%</span>
               </div>
               <svg
@@ -202,6 +202,14 @@ export function VppPanel({ snap, sea, onSet, onAll, onClose }: { snap: Snapshot;
                 <line x1={4} x2={W - 4} y1={PY(data.target)} y2={PY(data.target)} stroke="rgba(148,163,184,0.3)" strokeDasharray="2 3" />
                 <line x1={PX(c.opt)} x2={PX(c.opt)} y1={2} y2={H - 2} stroke="#67e8f9" strokeOpacity={0.6} strokeDasharray="2 2" />
                 <polyline points={pts} fill="none" stroke="#22d3ee" strokeWidth={1.6} />
+                {/* the optimisation path for this setting, in its colour: start (ring) to end (dot) */}
+                {path.length > 1 && (
+                  <g>
+                    <polyline points={path.map((p) => `${PX(p.c[c.k]).toFixed(1)},${PY(p.v).toFixed(1)}`).join(' ')} fill="none" stroke={COLORS[c.k]} strokeWidth={1.8} strokeLinejoin="round" opacity={0.95} />
+                    <circle cx={PX(path[0].c[c.k])} cy={PY(path[0].v)} r={2.4} fill="none" stroke={COLORS[c.k]} strokeWidth={1.2} />
+                    <circle cx={PX(path[path.length - 1].c[c.k])} cy={PY(path[path.length - 1].v)} r={2.4} fill={COLORS[c.k]} />
+                  </g>
+                )}
                 <line x1={PX(c.cur)} x2={PX(c.cur)} y1={2} y2={H - 2} stroke="#fff" strokeWidth={1.2} />
                 <circle cx={PX(c.best)} cy={PY(c.vBest)} r={2.6} fill="#34d399" />
               </svg>
@@ -238,9 +246,14 @@ export function VppPanel({ snap, sea, onSet, onAll, onClose }: { snap: Snapshot;
                 {vs[0].toFixed(2)} → <span className="text-good">{v1.toFixed(2)} kn</span> · {n} {L('steps', 'pas')}
                 {done && <span className="ml-1 text-good">· {L('Vmax reached', 'Vmax atteinte')}</span>}
               </span>
-              <button onClick={exportCsv} className="btn-ghost !px-2 !py-0.5 text-[11px]">
-                <Download size={11} /> CSV
-              </button>
+              <span className="flex gap-1">
+                <button onClick={exportCsv} className="btn-ghost !px-2 !py-0.5 text-[11px]">
+                  <Download size={11} /> CSV
+                </button>
+                <button onClick={() => (setRunning(false), setPath([]), setDone(false), (run.current = null))} className="btn-ghost !px-2 !py-0.5 text-[11px]" title={L('Clear the path', 'Effacer la trajectoire')}>
+                  <Eraser size={11} /> {L('Clear', 'Effacer')}
+                </button>
+              </span>
             </div>
             <svg viewBox={`0 0 ${CW} ${CH}`} className="mt-1 block w-full">
               {[0, 0.5, 1].map((g) => (
