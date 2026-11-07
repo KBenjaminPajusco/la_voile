@@ -2,7 +2,7 @@
 // over its whole range (the other controls left where they are), with where you are, the top of the
 // curve and the polar's optimum. Click a curve to put that control there.
 import { useEffect, useRef, useState } from 'react';
-import { Anchor, X } from 'lucide-react';
+import { Anchor, Download, Play, Square, X } from 'lucide-react';
 import type { ControlKey, Controls } from '../content/types';
 import type { Snapshot } from '../sim/engine';
 import { CONTROL_RATES } from '../sim/engine';
@@ -51,6 +51,16 @@ function sweep(snap: Snapshot, sea: number): { curves: Curve[]; target: number }
   return { curves, target: base.target };
 }
 
+const COLORS: Record<string, string> = {
+  jibSheet: '#22d3ee', jibLead: '#a78bfa', jibHalyard: '#f472b6', mainSheet: '#fbbf24', traveller: '#fb923c',
+  vang: '#34d399', outhaul: '#60a5fa', cunningham: '#e879f9', backstay: '#f87171', hike: '#cbd5e1',
+};
+
+interface PathPoint {
+  c: Controls;
+  v: number;
+}
+
 export function VppPanel({ snap, sea, onSet, onAll, onClose }: { snap: Snapshot; sea: number; onSet: (k: ControlKey, v: number) => void; onAll: () => void; onClose: () => void }) {
   const kite = snap.plan.headsail === 'gennaker';
   const [data, setData] = useState(() => sweep(snap, sea));
@@ -61,6 +71,83 @@ export function VppPanel({ snap, sea, onSet, onAll, onClose }: { snap: Snapshot;
     const id = window.setInterval(() => setData(sweep(snapRef.current, sea)), 1500);
     return () => window.clearInterval(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ---- continuous optimisation: from the present trim, every control moves at most 2 points per
+  // step towards the top of ITS speed curve (the others as they are), then the curves are redrawn;
+  // a step that does not gain is halved. It stops when the speed stops rising: Vmax at this angle,
+  // reached by a continuous path from where you started. A boat too badly trimmed to have any slope
+  // (stopped) first walks towards the polar optimum, still 2 points at a time.
+  // The boat follows for real; the path is kept for the curves (and the CSV).
+  const keysFor = (k: boolean) => (k ? KEYS_KITE : KEYS_JIB);
+  const [running, setRunning] = useState(false);
+  const [path, setPath] = useState<PathPoint[]>([]);
+  const [done, setDone] = useState(false);
+  const run = useRef<{ c: Controls; tws: number; twa: number; step: number; quiet: number } | null>(null);
+  const start = () => {
+    const sn = snapRef.current;
+    const c = { ...sn.targets };
+    run.current = { c, tws: sn.tws, twa: sn.twa, step: 0.02, quiet: 0 };
+    setPath([{ c: { ...c }, v: solve(c, sn.tws, sn.twa, sn.plan, sea).v }]);
+    setDone(false);
+    setRunning(true);
+  };
+  useEffect(() => {
+    if (!running) return;
+    const id = window.setInterval(() => {
+      const r = run.current;
+      if (!r) return;
+      const plan = snapRef.current.plan;
+      const keys = keysFor(plan.headsail === 'gennaker');
+      const v = (c: Controls) => solve(c, r.tws, r.twa, plan, sea).v;
+      const v0 = v(r.c);
+      const next = { ...r.c };
+      let moved = false;
+      for (const k of keys) {
+        let bx = r.c[k];
+        let bv = v0;
+        for (let i = 0; i <= 16; i++) {
+          const x = i / 16;
+          const vx = v({ ...r.c, [k]: x });
+          if (vx > bv + 1e-4) (bv = vx), (bx = x);
+        }
+        const d = bx - r.c[k];
+        if (Math.abs(d) > 1e-3) moved = true;
+        next[k] = r.c[k] + Math.sign(d) * Math.min(Math.abs(d), r.step);
+      }
+      if (!moved && v0 / Math.max(0.1, solve(r.c, r.tws, r.twa, plan, sea).target) < 0.6) {
+        // no slope anywhere (boat stopped): walk towards the polar optimum
+        const o = optimalControls(r.tws, Math.abs(r.twa), plan.headsail);
+        for (const k of keys) next[k] = r.c[k] + Math.sign(o[k] - r.c[k]) * Math.min(Math.abs(o[k] - r.c[k]), 0.02);
+      }
+      const v1 = v(next);
+      let finished = false;
+      if (v1 <= v0 + 1e-5 && moved) {
+        r.step *= 0.5;
+        if (r.step < 0.0025) finished = true;
+      } else if (v1 <= v0 + 1e-5) finished = true;
+      else {
+        r.c = next;
+        r.quiet = v1 - v0 < 0.001 ? r.quiet + 1 : 0;
+        for (const k of keys) onSet(k, Math.round(next[k] * 1000) / 1000);
+        setPath((p) => [...p, { c: { ...next }, v: v1 }]);
+        if (r.quiet >= 8 || path.length > 400) finished = true;
+      }
+      if (finished) {
+        setRunning(false);
+        setDone(true);
+      }
+    }, 200);
+    return () => window.clearInterval(id);
+  }, [running]); // eslint-disable-line react-hooks/exhaustive-deps
+  const exportCsv = () => {
+    const keys = keysFor(kite);
+    const rows = [['step', 'speed_kn', ...keys].join(','), ...path.map((p, i) => [i, p.v.toFixed(3), ...keys.map((k) => p.c[k].toFixed(3))].join(','))];
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([rows.join(String.fromCharCode(10))], { type: 'text/csv' }));
+    a.download = `trimmaster-vmax-${snap.tws.toFixed(0)}kn-${Math.abs(snap.twa).toFixed(0)}deg.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
 
   const vMax = Math.max(...data.curves.flatMap((c) => c.vs), data.target);
   const vMin = Math.max(0, Math.min(...data.curves.flatMap((c) => c.vs)));
@@ -80,7 +167,10 @@ export function VppPanel({ snap, sea, onSet, onAll, onClose }: { snap: Snapshot;
             {L(`${snap.tws.toFixed(1)} kn true, ${Math.abs(snap.twa).toFixed(0)}° · target ${data.target.toFixed(2)} kn · click a curve to set it`, `${snap.tws.toFixed(1)} nds réels, ${Math.abs(snap.twa).toFixed(0)}° · cible ${data.target.toFixed(2)} nds · clique une courbe pour régler`)}
           </div>
         </div>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
+          <button onClick={() => (running ? (setRunning(false), setDone(true)) : start())} className={`btn-ghost !px-2 !py-1 text-xs ${running ? 'text-warn' : 'text-cyan-200'}`} title={L('From the present trim, every control a little at a time up the speed gradient until Vmax at this angle', 'Depuis le réglage actuel, tous les réglages un peu à la fois dans le sens qui fait gagner le plus, jusqu’à la Vmax de cet angle')}>
+            {running ? <Square size={12} /> : <Play size={12} />} {running ? L('Stop', 'Arrêter') : L('Continuous optimisation', 'Optimisation continue')}
+          </button>
           <button onClick={onAll} className="btn-ghost !px-2 !py-1 text-xs text-good" title={L('Every control to the polar optimum (P)', 'Tous les réglages à l’optimum de la polaire (P)')}>
             <Anchor size={12} /> {L('All to optimum', 'Tout à l’optimum')}
           </button>
@@ -129,6 +219,54 @@ export function VppPanel({ snap, sea, onSet, onAll, onClose }: { snap: Snapshot;
           );
         })}
       </div>
+      {path.length > 1 && (() => {
+        const keys = keysFor(kite);
+        const CW = 600;
+        const CH = 130;
+        const n = path.length - 1;
+        const vs = path.map((p) => p.v);
+        const v0 = Math.min(...vs);
+        const v1 = Math.max(...vs);
+        const sx = (i: number) => 30 + (i / Math.max(1, n)) * (CW - 70);
+        const sy = (x: number) => 8 + (1 - x) * (CH - 22);
+        const sv = (v: number) => 8 + (1 - (v - v0) / Math.max(0.02, v1 - v0)) * (CH - 22);
+        return (
+          <div className="mt-2 rounded border border-cyan-300/15 bg-navy-900/70 p-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+              <span className="font-semibold uppercase tracking-wider text-cyan-200">{L('Path to Vmax', 'Trajectoire vers Vmax')}</span>
+              <span className="num text-slate-300">
+                {vs[0].toFixed(2)} → <span className="text-good">{v1.toFixed(2)} kn</span> · {n} {L('steps', 'pas')}
+                {done && <span className="ml-1 text-good">· {L('Vmax reached', 'Vmax atteinte')}</span>}
+              </span>
+              <button onClick={exportCsv} className="btn-ghost !px-2 !py-0.5 text-[11px]">
+                <Download size={11} /> CSV
+              </button>
+            </div>
+            <svg viewBox={`0 0 ${CW} ${CH}`} className="mt-1 block w-full">
+              {[0, 0.5, 1].map((g) => (
+                <g key={g}>
+                  <line x1={30} x2={CW - 40} y1={sy(g)} y2={sy(g)} stroke="rgba(148,163,184,0.15)" />
+                  <text x={26} y={sy(g) + 3} fontSize={9} textAnchor="end" fill="#64748b">{Math.round(g * 100)}%</text>
+                </g>
+              ))}
+              {keys.map((k) => (
+                <polyline key={k} points={path.map((p, i) => `${sx(i).toFixed(1)},${sy(p.c[k]).toFixed(1)}`).join(' ')} fill="none" stroke={COLORS[k]} strokeWidth={1.4} opacity={0.9} />
+              ))}
+              <polyline points={path.map((p, i) => `${sx(i).toFixed(1)},${sv(p.v).toFixed(1)}`).join(' ')} fill="none" stroke="#fff" strokeWidth={2.4} />
+              <text x={CW - 36} y={sv(v1) + 3} fontSize={9} fill="#fff">{v1.toFixed(2)}</text>
+              <text x={CW - 36} y={sv(v0) + 3} fontSize={9} fill="#94a3b8">{v0.toFixed(2)}</text>
+            </svg>
+            <div className="mt-0.5 flex flex-wrap gap-x-2.5 gap-y-0.5 text-[10px]">
+              <span className="text-white">━ {L('speed', 'vitesse')}</span>
+              {keys.map((k) => (
+                <span key={k} style={{ color: COLORS[k] }}>
+                  ━ {label(k)} {Math.round(path[0].c[k] * 100)}→{Math.round(path[n].c[k] * 100)}%
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
       <div className="mt-1 flex flex-wrap gap-3 text-[10px] text-slate-400">
         <span>
           <span className="mr-1 inline-block h-2 w-0.5 bg-white align-middle" />
