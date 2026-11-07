@@ -199,6 +199,7 @@ export class TrimmerScene {
 
   // smoothed / dynamic state
   private heelS = 0;
+  private lsPrev = 0;
   private headingS = 0;
   private wSide = 1;
   private first = true;
@@ -571,6 +572,10 @@ export class TrimmerScene {
       this.vPrev = s.v;
       this.first = false;
     }
+    // the sim's heel is measured from the leeward side: when the tack changes it changes sign while the
+    // boat itself does not move - flip the smoothed value with it so the hull does not swing across
+    if (this.lsPrev !== 0 && Ls !== this.lsPrev) this.heelS = -this.heelS;
+    this.lsPrev = Ls;
     this.heelS += (s.heel - this.heelS) * Math.min(1, dt * 7);
     let dh = s.heading - this.headingS;
     dh = ((dh + 540) % 360) - 180;

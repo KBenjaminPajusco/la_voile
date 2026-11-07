@@ -204,6 +204,10 @@ export function Cockpit({
       else if (k === 'r') s.releaseSheet();
       else if (k === 'q') s.setGear(s.gear === 'high' ? 'low' : 'high');
       else if (k === '6') s.setGrinder(!s.grinder);
+      else if (k === '7') {
+        if (s.crewHold) s.crewCross();
+        else s.setRollMode(!s.rollMode);
+      }
       else if (k === 'c') s.setCrewFore(s.plan.crewFore === 0 ? 1 : s.plan.crewFore === 1 ? -1 : 0);
       else if (k === 'enter' && freeMode) {
         if (Math.abs(s.twa) < 95) s.commandTack();
@@ -675,6 +679,19 @@ export function Cockpit({
     <>
           <div className="panel-title mb-2">{L('Crew', 'Équipage')}</div>
           <ControlSlider compact={slim} label={L('Crew weight', 'Poids équipage')} actual={snap.controls.hike} target={snap.targets.hike} onChange={set('hike')} keys={['Z', 'X']} leftLabel={L('leeward', 'sous le vent')} rightLabel={L('full hike', 'plein rappel')} highlight={focus.has('hike')} />
+          {/* roll tacks / gybes */}
+          <div className="mt-2 flex gap-1">
+            <button
+              onClick={() => sim.setRollMode(!snap.rollMode)}
+              title={L('Roll tacks and gybes: the crew stays on the old side through head to wind (the boat rolls), then crosses hard on your call and flattens it - the rig sweeps to windward and pumps the sails. Cross as the new side fills; late, the boat lies down.', 'Virements et empannages roulés : l’équipage reste sur l’ancien bord au passage du vent (le bateau roule), puis traverse fort à ton signal et le remet à plat - le gréement balaie au vent et pompe les voiles. Traverse quand le nouveau bord se remplit ; trop tard, le bateau se couche.')}
+              className={`btn flex-1 !px-2 !py-1.5 text-xs ${snap.rollMode ? 'border border-good/40 bg-good/20 text-good' : 'btn-ghost'}`}
+            >
+              {snap.rollMode ? L('Roll tacks: on', 'Virements roulés : oui') : L('Roll tacks: off', 'Virements roulés : non')} <Kbd>7</Kbd>
+            </button>
+            <button onClick={() => sim.crewCross()} disabled={!snap.crewHold} className={`btn flex-1 !px-2 !py-1.5 text-xs ${snap.crewHold ? 'animate-pulse bg-warn text-navy-950' : 'btn-ghost'}`}>
+              {L('Cross!', 'Traverse !')} <Kbd>7</Kbd>
+            </button>
+          </div>
           <div className="mt-2">
             <div className="mb-1 text-[11px] uppercase tracking-wider text-slate-400">
               {L('Crew weight fore/aft', 'Poids équipage av/ar')} <Kbd>C</Kbd>
@@ -953,6 +970,7 @@ function KeyHelp({ freeMode }: { freeMode: boolean }) {
     ['Q', L('Winch gear high / low', 'Vitesse winch grande / petite')],
     [L('Shift (hold)', 'Maj (maintenir)'), L('Sprint grind', 'Moulinage sprint')],
     ['6', L('Grinder on the jib winch (you tail)', 'Équipier au winch de foc (tu embraques)')],
+    ['7', L('Roll tacks on / off — during a roll: crew, cross!', 'Virements roulés oui / non — pendant un roulé : équipage, traverse !')],
     ['1 – 5', L('Calls: pressure, lull, need speed, can point, speed OK', 'Annonces : risée, molle, besoin de vitesse, on peut serrer, vitesse OK')],
     [L('Space', 'Espace'), L('Pause / resume', 'Pause / reprendre')],
   ];

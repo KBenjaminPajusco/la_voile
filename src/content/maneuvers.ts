@@ -85,6 +85,31 @@ const tailCriterion = (markName: string, frac: number, good: number, bad: number
   },
 });
 
+const rollCriterion = (w = 0.8): Criterion => ({
+  id: 'roll',
+  group: 'Timing',
+  label: L('Roll tack: crew crossing timing', 'Virement roulé : moment où l’équipage traverse'),
+  weight: w,
+  evaluate: (ctx) => {
+    const m = ctx.sim.maneuvers.find((x) => x.kind === 'tack');
+    if (!m) return { score: 0, note: L('No tack.', 'Pas de virement.') };
+    if (!m.roll)
+      return {
+        score: 50,
+        note: L('Flat tack (crew in the middle at head to wind). A roll tack (key 7) wins speed: the crew holds the old side through the wind, then crosses hard as the new side fills.', 'Virement à plat (équipage au milieu vent debout). Un virement roulé (touche 7) fait gagner de la vitesse : l’équipage tient l’ancien bord au passage du vent, puis traverse fort quand le nouveau bord se remplit.'),
+      };
+    const a = Math.abs(m.crossTwa ?? 99);
+    const score = a <= 12 ? 100 : a <= 22 ? Math.round(100 - ((a - 12) / 10) * 40) : 30;
+    return {
+      score,
+      note:
+        a <= 12
+          ? L(`Crew crossed ${a.toFixed(0)}° past head to wind: the boat flattened as the new side filled — the rig pumped the sails.`, `Équipage traversé ${a.toFixed(0)}° après le vent debout : le bateau s’est remis à plat quand le nouveau bord se remplissait — le gréement a pompé les voiles.`)
+          : L(`Crew crossed late (${a.toFixed(0)}° past head to wind): the boat lay down to leeward before it was flattened.`, `Équipage traversé tard (${a.toFixed(0)}° après le vent debout) : le bateau s’est couché sous le vent avant d’être remis à plat.`),
+    };
+  },
+});
+
 const minSpeedCriterion = (w = 1): Criterion => ({
   id: 'minspeed',
   group: 'Acceleration',
@@ -176,6 +201,7 @@ export const MANEUVERS: ScenarioDef[] = [
       accelTrim('cross'),
       callCriterion('call', L('Called accel / foot after the tack', 'Mode relance / vitesse annoncé après le virement'), ['accel', 'foot'], 'cross', 1, 6, 0.7),
       minSpeedCriterion(0.8),
+      rollCriterion(0.8),
       accelCriterion('cross', 0.9, 9, 18, 1.5),
       finalControlCriterion('jibSheet', L('Final jib trim', 'Réglage final du foc'), 0.05, 1),
       balanceEnd(0.8),
@@ -185,14 +211,15 @@ export const MANEUVERS: ScenarioDef[] = [
     energyBudget: 35,
     debrief: {
       physics: L(
-        'Through the tack the boat loses drive (sails luff head to wind) while hull drag continues, so speed falls. The jib can be tailed almost for free while it is unloaded; once the apparent wind fills it, every centimetre is ground against load. Out of the tack the speed is low, apparent wind is aft and the keel needs more leeway: a slightly eased jib (wider groove, lower side force) and a foot mode give more drive per unit of side force. Trim progressively as the apparent wind moves forward with speed.',
-        "Pendant le virement, le bateau perd sa propulsion (les voiles faseyent vent debout) alors que la traînée de la coque continue : la vitesse chute. Le foc peut être embraqué presque gratuitement tant qu'il est déchargé ; dès que le vent apparent le gonfle, chaque centimètre se mouline contre la charge. En sortie de virement, la vitesse est faible, le vent apparent est en arrière et la quille a besoin de plus de dérive : un foc légèrement choqué (plage de réglage plus large, force latérale plus faible) et un mode vitesse donnent plus de propulsion par unité de force latérale. Bordez progressivement à mesure que le vent apparent avance avec la vitesse.",
+        'Through the tack the boat loses drive (sails luff head to wind) while hull drag continues, so speed falls. The jib can be tailed almost for free while it is unloaded; once the apparent wind fills it, every centimetre is ground against load. Out of the tack the speed is low, apparent wind is aft and the keel needs more leeway: a slightly eased jib (wider groove, lower side force) and a foot mode give more drive per unit of side force. Trim progressively as the apparent wind moves forward with speed. In a roll tack the crew holds the old side through the wind (the boat rolls onto the new leeward side), then crosses hard as the new side fills: flattening the boat sweeps the rig to windward, the sails meet the air at a bigger angle and pump the boat forward. Crossing late lets the boat lie down and costs more than it wins.',
+        "Pendant le virement, le bateau perd sa propulsion (les voiles faseyent vent debout) alors que la traînée de la coque continue : la vitesse chute. Le foc peut être embraqué presque gratuitement tant qu'il est déchargé ; dès que le vent apparent le gonfle, chaque centimètre se mouline contre la charge. En sortie de virement, la vitesse est faible, le vent apparent est en arrière et la quille a besoin de plus de dérive : un foc légèrement choqué (plage de réglage plus large, force latérale plus faible) et un mode vitesse donnent plus de propulsion par unité de force latérale. Bordez progressivement à mesure que le vent apparent avance avec la vitesse. Dans un virement roulé, l'équipage tient l'ancien bord au passage du vent (le bateau roule sur le nouveau bord sous le vent), puis traverse fort quand le nouveau bord se remplit : remettre le bateau à plat balaie le gréement au vent, les voiles prennent l'air sous un angle plus fort et pompent le bateau vers l'avant. Traverser trop tard laisse le bateau se coucher et coûte plus que ça ne rapporte.",
       ),
       ideal: [
         L('Load lazy sheet early, handle in.', "Préparer l'écoute molle tôt, manivelle en place."),
         L('Release when the jib starts to back (bow ~5–10° from head to wind).', "Larguer quand le foc commence à prendre à contre (étrave à ~5–10° du vent debout)."),
         L('Tail hard immediately — get 85 % in before the sail loads.', 'Embraquer fort immédiatement — rentrer 85 % avant que la voile se charge.'),
         L('Stop ~5 % short; call "accel".', "S'arrêter ~5 % avant ; annoncer « relance »."),
+        L('Roll tack (key 7): crew holds the old side through the wind, then "cross!" ~5–10° past head to wind.', "Virement roulé (touche 7) : l'équipage tient l'ancien bord au passage du vent, puis « traverse ! » ~5–10° après le vent debout."),
         L('Grind the last few % as the speedo comes up; call "speed OK".', 'Mouliner les derniers % quand le speedo monte ; annoncer « vitesse OK ».'),
       ],
       commonErrors: [
@@ -201,7 +228,7 @@ export const MANEUVERS: ScenarioDef[] = [
         L('Grinding block-to-block at 3 knots.', 'Border à bloc à 3 nœuds.'),
       ],
     },
-    hints: [L('A = prepare sheet, R = release', "A = préparer l'écoute, R = larguer"), L('W/S = trim/ease jib target', 'W/S = border/choquer la cible du foc')],
+    hints: [L('A = prepare sheet, R = release', "A = préparer l'écoute, R = larguer"), L('W/S = trim/ease jib target', 'W/S = border/choquer la cible du foc'), L('7 = roll tacks on, then 7 again = "cross!"', '7 = virements roulés, puis 7 à nouveau = « traverse ! »')],
   },
 
   // ------------------------------------------------------------------ Gybe

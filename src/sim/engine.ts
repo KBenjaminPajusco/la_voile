@@ -76,6 +76,11 @@ export interface Maneuver {
   targetTwa: number; // signed target after the maneuver
   done: boolean;
   crossedAt?: number; // time bow (tack) / stern (gybe) crossed the wind
+  /** roll tack / gybe: the crew held the old side through the turn */
+  roll?: boolean;
+  /** when the crew crossed to the new side (roll), and the TWA then */
+  crossAt?: number;
+  crossTwa?: number;
   releasedAt?: number;
   releaseTwa?: number;
   autoReleased?: boolean;
@@ -139,6 +144,10 @@ export interface Snapshot {
   kiteMainBackwind: number;
   /** the kite hanging off its luff with the heel (gravity vs wind), rad, + = swung to leeward */
   kiteSwing: number;
+  /** roll tacks / gybes on (the crew holds the old side through the turn, then crosses hard) */
+  rollMode: boolean;
+  /** the crew is holding the old side, waiting for the call to cross */
+  crewHold: boolean;
   autoTrim: boolean;
   manualHelm: boolean;
   /** controls the player has caught (not on auto) while the auto crew is on */
@@ -215,6 +224,16 @@ export class Simulator {
   windT = 0;
   /** kite swing under gravity (rad, + to leeward), with a pendulum lag */
   kiteSwing = 0;
+  /** roll tacks / gybes: the crew stays hiked on the old side through head to wind, then crosses hard
+   *  and flattens the boat - the rig sweeps to windward and pumps the sails */
+  rollMode = false;
+  crewHold = false;
+  private crewPlan: { roll: boolean; saved: number; holdStart: number; released: boolean } | null = null;
+  private crossNow = false;
+  private fastCross = false;
+  private lastSide = 0;
+  /** heel helping (+) or fighting (-) the turn of the present maneuver, deg */
+  private turnAssist = 0;
   windRate = 1;
   private vmgUpCache = { tws: -1, vmg: 0 };
   private autoHoistSince: number | null = null;
@@ -359,6 +378,26 @@ export class Simulator {
   /** seconds (real time, at the current closing rate) before a scripted wind event reaches the boat */
   eventEta(e: WindEvent): number {
     return (e.start - this.windT) / Math.max(0.15, this.windRate);
+  }
+  /** roll tacks / gybes on or off; during a roll, the call to cross */
+  setRollMode(on: boolean) {
+    if (on === this.rollMode) return;
+    this.rollMode = on;
+    this.actions.push({ t: this.t, kind: 'crew', label: on ? L('Roll tacks on', 'Virements roulés') : L('Roll tacks off', 'Virements à plat'), tag: on ? 'roll on' : 'roll off' });
+  }
+  crewCross() {
+    if (!this.crewHold) return;
+    this.crossNow = true;
+    this.actions.push({ t: this.t, kind: 'crew', label: L('Crew: cross!', 'Équipage : traverse !'), tag: 'cross' });
+  }
+  /** a crew weight on one side seen from the other tack: the same place, measured from the new windward side */
+  private mirrorHike(h: number) {
+    const p = this.p;
+    const arm = h < 0.25 ? -0.6 + (p.crewArmInboard + 0.6) * (h / 0.25) : p.crewArmInboard + (p.crewArmHiked - p.crewArmInboard) * ((h - 0.25) / 0.75);
+    const a = -arm;
+    if (a <= -0.6) return 0;
+    if (a < p.crewArmInboard) return (0.25 * (a + 0.6)) / (p.crewArmInboard + 0.6);
+    return clamp(0.25 + (0.75 * (a - p.crewArmInboard)) / (p.crewArmHiked - p.crewArmInboard), 0, 1);
   }
   /** call a crew member to the jib winch (they grind, you tail) or send them back to the rail */
   setGrinder(on: boolean) {
@@ -510,6 +549,15 @@ export class Simulator {
   }
   private startManeuver(m: Maneuver) {
     m.minSpeed = this.v;
+    if (m.kind === 'tack' || m.kind === 'gybe') {
+      const roll = this.rollMode || this.autoTrim;
+      this.crewPlan = { roll, saved: this.targets.hike, holdStart: 0, released: false };
+      this.crossNow = false;
+      // without the technique the crew comes inboard as the boat turns, to be in the middle at the crossing
+      if (!roll) this.targets.hike = Math.min(this.targets.hike, 0.16); // ~ on the centreline
+      else this.targets.hike = Math.min(this.targets.hike, 0.75); // rolled: hiked, a touch in, to roll to windward at head to wind
+      m.roll = roll;
+    }
     this.maneuver = m;
     this.maneuvers.push(m);
     const kindFr: Record<ManeuverKind, string> = { tack: 'virement', gybe: 'empannage', 'bear-away': 'abattée', 'harden-up': 'lofée' };
@@ -557,6 +605,7 @@ export class Simulator {
     this.wavePhase += (2 * Math.PI * dt) / 4.2;
 
     this.updateHelm(dt);
+    this.updateCrewSide();
     this.updateHeadsailState(dt);
     if (this.autoTrim) this.updateAutoCrew(dt);
     this.updateControls(dt);
@@ -631,7 +680,24 @@ export class Simulator {
 
     // surge
     const mass = (this.p.displacement + this.p.crewMass) * 1.15;
-    const turnDrag = this.maneuver && !this.maneuver.done ? 0.5 * 1025 * (this.v * KN) ** 2 * this.p.rudderArea * 0.06 : 0;
+    // a turn steered with the heel needs less rudder (less drag); against the heel, more
+    const turnDrag = this.maneuver && !this.maneuver.done ? 0.5 * 1025 * (this.v * KN) ** 2 * this.p.rudderArea * 0.06 * clamp(1 - 0.03 * this.turnAssist, 0.4, 1.6) : 0;
+    // the rig sweeping through the air: flattening a heeled boat moves the sails to windward (more
+    // apparent wind, more drive - the pump of a roll tack); heeling moves them to leeward (less)
+    // modelled from the lift: swept to windward the sails meet the air at a larger angle (beta) and
+    // their lift tips forward - even near head to wind, where the cloth is otherwise just luffing
+    // (fanning). Heeling to leeward lowers the angle: a sail below its angle simply luffs, so it gives
+    // back much less than flattening wins. That asymmetry is the gain of a roll.
+    const rigSpeed = -this.heelRate * DEG * 5.2; // m/s at the centre of effort, + = to windward
+    const awsMs = Math.max(1.5, f.aws * KN);
+    const beta = Math.atan2(rigSpeed, awsMs);
+    const area = this.p.mainArea + (this.plan.jibReleased ? 0.3 : 1) * (this.plan.headsail === 'gennaker' ? 0.4 : 1) * this.p.jibArea;
+    const fRef = 0.5 * 1.225 * (awsMs * awsMs + rigSpeed * rigSpeed) * area * 1.25;
+    // the asymmetry only in a tack / gybe (roll): outside, rolling in the waves gives nothing for free
+    // (rhythmic rolling is also what rule 42 forbids)
+    const mm = this.maneuver;
+    const inRoll = !!mm && (mm.kind === 'tack' || mm.kind === 'gybe') && (!mm.done || (mm.crossedAt !== undefined && this.t - mm.crossedAt < 4));
+    const pump = fRef * Math.sin(beta) * (beta > 0 || !inRoll ? 1 : 0.25);
     // pitch: natural period ~1.7 s. Waves force it (hardest upwind), crew weight at the ends
     // makes it worse, attached sails damp it. Drive load presses the bow down; accelerating
     // squats the stern. Hobby-horsing costs speed (pitchDrag).
@@ -650,7 +716,7 @@ export class Simulator {
     this.pitch = clamp(this.pitch + this.pitchRate * dt, -12, 12);
     const pitchDrag = 0.00004 * (this.p.displacement + this.p.crewMass) * 9.81 * Math.min(400, this.pitchRate * this.pitchRate) / 25;
     const rollDrag = this.sea * 25 * Math.abs(Math.sin(this.wavePhase)) + pitchDrag;
-    const a = (f.drive - f.resistance - turnDrag - rollDrag) / mass; // m/s²
+    const a = (f.drive + pump - f.resistance - turnDrag - rollDrag) / mass; // m/s²
     const vms = Math.max(0, this.v * KN + a * dt);
     const newV = vms / KN;
     this.accel = this.accel * 0.85 + ((newV - this.v) / dt) * 0.15;
@@ -682,11 +748,20 @@ export class Simulator {
     let desired: number; // signed
     let maxRate = 4 * authority;
 
+    this.turnAssist = 0;
     if (m && !m.done) {
       desired = m.targetTwa;
       if (m.kind === 'tack') maxRate = 14 * clamp(this.v / 4, 0.35, 1.1);
       else if (m.kind === 'gybe') maxRate = 11 * authority;
       else maxRate = 8 * authority;
+      // heel steers: heeled to leeward the boat luffs, to windward it bears away. Into a tack a leeward
+      // heel helps; once through, a boat rolled onto the new leeward side fights the bear-away to the
+      // new course. Into a gybe a windward heel helps the bear-away; once through, a leeward heel helps.
+      if (m.kind === 'tack' || m.kind === 'gybe') {
+        const crossed = m.crossedAt !== undefined;
+        this.turnAssist = m.kind === 'tack' ? (crossed ? -this.heel : this.heel) : crossed ? this.heel : -this.heel;
+        maxRate *= clamp(1 + 0.012 * this.turnAssist, 0.7, 1.35);
+      }
       // bearing away fights an over-trimmed main (weather helm)
       if (m.kind === 'bear-away') {
         const wh = Math.max(0, this.f.rudder);
@@ -775,6 +850,51 @@ export class Simulator {
       this.targets.jibSheet = Math.max(this.targets.jibSheet, 0.35);
       if (this.maneuver) this.maneuver.sailChangeAt = this.t;
       this.say('pit', L('Gennaker up — trim it!', 'Gennaker envoyé — borde-le !'), 'info');
+    }
+  }
+
+  /** the boat changed tack (or gybe): the heel and the crew keep their place in the world, so measured
+   *  from the new windward side they change sign. During a roll the crew holds there until the call. */
+  private updateCrewSide() {
+    const side = Math.sign(this.twa) || 1;
+    if (this.lastSide === 0) this.lastSide = side;
+    const m = this.maneuver && !this.maneuver.done && (this.maneuver.kind === 'tack' || this.maneuver.kind === 'gybe') ? this.maneuver : null;
+    if (side !== this.lastSide) {
+      this.lastSide = side;
+      this.heel = -this.heel;
+      this.heelRate = -this.heelRate;
+      this.kiteSwing = -this.kiteSwing;
+      this.controls.hike = this.mirrorHike(this.controls.hike);
+      const plan = this.crewPlan;
+      if (m && plan) {
+        if (plan.roll) {
+          // rolled: the crew is still on the old windward side, now the new leeward one
+          this.targets.hike = this.controls.hike;
+          this.crewHold = true;
+          plan.holdStart = this.t;
+        } else this.targets.hike = plan.saved; // cross now
+      }
+    }
+    const plan = this.crewPlan;
+    if (this.crewHold && plan && m) {
+      const since = this.t - plan.holdStart;
+      const auto = this.autoTrim && (m.kind === 'tack' ? Math.abs(this.twa) >= 10 : since >= 0.6);
+      const overdue = m.kind === 'tack' ? Math.abs(this.twa) >= 28 || since > 2.4 : since > 2.4;
+      if (this.crossNow || auto || overdue) {
+        this.crewHold = false;
+        this.crossNow = false;
+        plan.released = true;
+        this.targets.hike = plan.saved;
+        this.fastCross = true;
+        m.crossAt = this.t;
+        m.crossTwa = this.twa;
+        if (overdue && !auto && !this.crossNow) this.say('pit', L('Crossing — late, the boat is lying down!', 'On traverse — en retard, le bateau est couché !'), 'warn', 'latecross', 3);
+      }
+    }
+    if ((!m || m.done) && (this.crewHold || this.crewPlan)) {
+      if (this.crewHold && this.crewPlan) this.targets.hike = this.crewPlan.saved;
+      this.crewHold = false;
+      this.crewPlan = null;
     }
   }
 
@@ -870,6 +990,7 @@ export class Simulator {
     const o = optimalControls(this.tws, twaAbs, this.plan.headsail);
     for (const k of Object.keys(o) as ControlKey[]) {
       if (!this.autoKeys.has(k)) continue;
+      if (k === 'hike' && this.crewPlan) continue; // in a tack / gybe the crew weight follows the roll
       let v = o[k];
       // the kite is flown with a small curl on the luff, as a trimmer does
       if (k === 'jibSheet' && this.plan.headsail === 'gennaker') v -= 0.045;
@@ -970,6 +1091,10 @@ export class Simulator {
       const d = tg[k] - c[k];
       if (Math.abs(d) < 1e-4) continue;
       let rate = d > 0 ? r.up : r.down;
+      if (k === 'hike' && this.fastCross) {
+        rate *= 1.6;
+        if (Math.abs(d) < 0.03) this.fastCross = false;
+      }
       if (k === 'jibLead' && this.f.jibSheetLoad > (this.plan.headsail === 'gennaker' ? 600 : 1900)) rate *= 0.3; // loaded car barely moves
       if (k === 'jibHalyard' && d > 0) rate *= clamp(1.3 - this.f.aws / 30, 0.3, 1);
       if (k === 'mainSheet' && d > 0) rate *= clamp(1.25 - this.f.mainSheetLoad / 2500, 0.35, 1);
@@ -1052,6 +1177,8 @@ export class Simulator {
       kiteLeechFlap: this.plan.headsail === 'gennaker' ? this.plan.kiteLeechFlap ?? 0 : 0,
       kiteMainBackwind: this.plan.headsail === 'gennaker' ? this.plan.kiteMainBackwind ?? 0 : 0,
       kiteSwing: this.kiteSwing,
+      rollMode: this.rollMode,
+      crewHold: this.crewHold,
       autoTrim: this.autoTrim,
       manualHelm: this.manualHelm,
       manualKeys: this.autoTrim ? (Object.keys(CONTROL_RATES) as ControlKey[]).filter((k) => !this.autoKeys.has(k)) : [],
