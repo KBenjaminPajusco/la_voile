@@ -137,6 +137,8 @@ export interface Snapshot {
   kiteLeechFlap: number;
   /** main luff backwinded by the kite 0..1 (main over-trimmed under the gennaker) */
   kiteMainBackwind: number;
+  /** the kite hanging off its luff with the heel (gravity vs wind), rad, + = swung to leeward */
+  kiteSwing: number;
   autoTrim: boolean;
   manualHelm: boolean;
   /** controls the player has caught (not on auto) while the auto crew is on */
@@ -211,6 +213,8 @@ export class Simulator {
    *  sailing into them (upwind) and much later running away from them (under the kite): they come from
    *  behind and catch up. Normalised so an upwind boat at target speed keeps the scripted timing. */
   windT = 0;
+  /** kite swing under gravity (rad, + to leeward), with a pendulum lag */
+  kiteSwing = 0;
   windRate = 1;
   private vmgUpCache = { tws: -1, vmg: 0 };
   private autoHoistSince: number | null = null;
@@ -566,7 +570,18 @@ export class Simulator {
       const opt = optimalControls(this.tws, Math.abs(twaS), 'gennaker').jibSheet;
       const luffPoint = opt - 0.03;
       this.kiteOptSheet = opt;
-      this.plan.kiteCurl = this.plan.gennakerCollapsed ? 1.5 : clamp((luffPoint - this.controls.jibSheet) / 0.1, 0, 1.5);
+      // gravity: ~3 kg of cloth hanging off the luff. With the boat heeled it swings to the low side,
+      // against what the wind holds it with - a couple of degrees on a full kite, a lot on a soft one
+      // (light air, curling, collapsed). Swung to leeward it works as if eased, to windward as if trimmed.
+      {
+        const W = 30; // N
+        const F = Math.max(0, this.f.gennaker?.force ?? 0);
+        const r = W / (F + W);
+        const want = Math.atan(2.5 * r * Math.sin(this.heel * DEG));
+        this.kiteSwing += (want - this.kiteSwing) * clamp(dt / 0.9, 0, 1);
+      }
+      const effSheet = this.controls.jibSheet - 0.35 * this.kiteSwing;
+      this.plan.kiteCurl = this.plan.gennakerCollapsed ? 1.5 : clamp((luffPoint - effSheet) / 0.1, 0, 1.5);
       const optMain = optimalControls(this.tws, Math.abs(twaS), 'gennaker').mainSheet;
       // main too eased: the kite's exit flow no longer runs along the main's leeward side (the slot
       // works like jib/main): first the kite leech flutters, eased further the luff breathes too
@@ -575,6 +590,7 @@ export class Simulator {
       // main over-trimmed: the kite's exit flow backwinds the main luff
       this.plan.kiteMainBackwind = clamp((this.controls.mainSheet - optMain - 0.08) / 0.2, 0, 1);
     } else {
+      this.kiteSwing = 0;
       this.plan.kiteCurl = 0;
       this.plan.kiteLeechFlap = 0;
       this.plan.kiteLuffFlap = 0;
@@ -1035,6 +1051,7 @@ export class Simulator {
       kiteOver: this.plan.headsail === 'gennaker' ? clamp((this.controls.jibSheet - this.kiteOptSheet - 0.06) / 0.1, 0, 1) : 0,
       kiteLeechFlap: this.plan.headsail === 'gennaker' ? this.plan.kiteLeechFlap ?? 0 : 0,
       kiteMainBackwind: this.plan.headsail === 'gennaker' ? this.plan.kiteMainBackwind ?? 0 : 0,
+      kiteSwing: this.kiteSwing,
       autoTrim: this.autoTrim,
       manualHelm: this.manualHelm,
       manualKeys: this.autoTrim ? (Object.keys(CONTROL_RATES) as ControlKey[]).filter((k) => !this.autoKeys.has(k)) : [],

@@ -77,6 +77,8 @@ export interface KiteDeform {
   leechFlap?: number;
   /** luff flutter 0..1 (main eased too far: the flow between main and kite goes back and forth) */
   luffFlap?: number;
+  /** gravity swing off the luff (rad, + = to leeward): the free cloth (head, belly) more than the clew */
+  swing?: number;
   time: number;
 }
 
@@ -170,6 +172,9 @@ export class KiteMold {
       v.set(this.base[i * 3], this.base[i * 3 + 1], this.base[i * 3 + 2]);
       // the leech swings with the sheet, the luff stays put
       let rot = swing * Math.pow(t, 0.9);
+      // gravity: the cloth hangs to the low side, the head and the belly more than the clew (held by the sheet)
+      const gs = k.swing ?? 0;
+      if (gs !== 0) rot += gs * Math.pow(t, 0.6) * (0.35 + 0.65 * h) * (1 - 0.5 * Math.max(0, t - 0.7) / 0.3);
       // collapse: the whole sail falls in and flutters
       if (k.collapse > 0) rot -= k.collapse * (0.35 * t + 0.12 * Math.sin(tm * 6 + t * 5 + h * 3) * t);
       // leech flutter: the last fifth of the chord shakes when the main chokes the exit flow

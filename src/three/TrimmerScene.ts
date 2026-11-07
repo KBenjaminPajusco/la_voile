@@ -763,6 +763,7 @@ export class TrimmerScene {
           curl: Math.min(1.5, s.kiteCurl ?? Math.max(0, (2 - midA) / 6)),
           leechFlap: s.kiteLeechFlap ?? 0,
           luffFlap: s.kiteLuffFlap ?? 0,
+          swing: s.kiteSwing ?? 0,
           collapse: collapsed ? 1 : 0,
           time: t,
         });
